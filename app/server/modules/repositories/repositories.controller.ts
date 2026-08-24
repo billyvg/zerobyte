@@ -23,6 +23,8 @@ import {
 	getSnapshotUsageDto,
 	getSnapshotUsageQuery,
 	scanSnapshotUsageDto,
+	getSnapshotUsageDiffDto,
+	getSnapshotUsageDiffQuery,
 	listSnapshotsDto,
 	listSnapshotsFilters,
 	dumpSnapshotDto,
@@ -49,6 +51,7 @@ import {
 	type ListSnapshotFilesDto,
 	type GetSnapshotUsageDto,
 	type ScanSnapshotUsageDto,
+	type GetSnapshotUsageDiffDto,
 	type ListSnapshotsDto,
 	type RestoreSnapshotDto,
 	type TagSnapshotsResponseDto,
@@ -224,6 +227,28 @@ export const repositoriesController = new Hono()
 
 		return c.json<ScanSnapshotUsageDto>(result, 200);
 	})
+	.get(
+		"/:shortId/snapshots/:snapshotId/usage/diff",
+		getSnapshotUsageDiffDto,
+		validator("query", getSnapshotUsageDiffQuery),
+		async (c) => {
+			const shortId = asShortId(c.req.param("shortId"));
+			const snapshotId = c.req.param("snapshotId");
+			const { against, path, limit } = c.req.valid("query");
+
+			const result = await repositoriesService.getSnapshotUsageDiff(shortId, snapshotId, against, {
+				path: path ? decodeURIComponent(path) : undefined,
+				limit,
+			});
+
+			// Trees are immutable once written, so this can be cached hard.
+			if (result.status === "ready") {
+				c.header("Cache-Control", "max-age=300, stale-while-revalidate=600");
+			}
+
+			return c.json<GetSnapshotUsageDiffDto>(result, 200);
+		},
+	)
 	.get("/:shortId/snapshots/:snapshotId/dump", dumpSnapshotDto, validator("query", dumpSnapshotQuery), async (c) => {
 		const shortId = asShortId(c.req.param("shortId"));
 		const snapshotId = c.req.param("snapshotId");

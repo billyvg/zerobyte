@@ -11,6 +11,9 @@ import {
 	resticStatsSchema,
 } from "@zerobyte/core/restic";
 import {
+	snapshotUsageDiffDirectorySchema,
+	snapshotUsageDiffEntrySchema,
+	snapshotUsageDiffMetaSchema,
 	snapshotUsageDirectorySchema,
 	snapshotUsageEntrySchema,
 	snapshotUsageMetaSchema,
@@ -378,6 +381,57 @@ export const scanSnapshotUsageDto = describeRoute({
 			content: {
 				"application/json": {
 					schema: resolver(scanSnapshotUsageResponse),
+				},
+			},
+		},
+	},
+});
+
+const snapshotUsageDiffReadyResponse = z.object({
+	status: z.literal("ready"),
+	meta: snapshotUsageDiffMetaSchema,
+	/** The directory being compared. */
+	path: z.string(),
+	directory: snapshotUsageDiffDirectorySchema.nullable(),
+	/** Children of `path` merged across both snapshots, biggest change first. */
+	entries: snapshotUsageDiffEntrySchema.array(),
+	/** Children before the limit was applied. */
+	totalEntries: z.number(),
+});
+
+/**
+ * One or both snapshots have no tree stored. Deliberately a 200 with a status
+ * rather than a 404, so the UI can render an explanation instead of an error.
+ */
+const snapshotUsageDiffMissingResponse = z.object({
+	status: z.literal("missing"),
+	missing: z.enum(["current", "against", "both"]),
+});
+
+const getSnapshotUsageDiffResponse = z.discriminatedUnion("status", [
+	snapshotUsageDiffReadyResponse,
+	snapshotUsageDiffMissingResponse,
+]);
+
+export type GetSnapshotUsageDiffDto = z.infer<typeof getSnapshotUsageDiffResponse>;
+
+export const getSnapshotUsageDiffQuery = z.object({
+	/** Snapshot ID (or short ID) to compare against. */
+	against: z.string(),
+	path: z.string().optional(),
+	limit: z.coerce.number().int().min(1).max(1000).optional(),
+});
+
+export const getSnapshotUsageDiffDto = describeRoute({
+	description: "Compares two snapshots' recorded usage trees to show what grew, shrank, appeared, or disappeared",
+	tags: ["Repositories"],
+	operationId: "getSnapshotUsageDiff",
+	responses: {
+		200: {
+			description: "Per-entry size deltas for a directory, largest change first",
+			content: {
+				"application/json": {
+					schema: resolver(getSnapshotUsageDiffResponse),
 				},
 			},
 		},
