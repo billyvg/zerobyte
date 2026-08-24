@@ -15,7 +15,6 @@ import { useEffect, useState } from "react";
 import { Database } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "~/client/components/ui/tabs";
 import { UsageExplorer } from "../components/snapshot-usage/usage-explorer";
-import { UsageDiffExplorer } from "../components/snapshot-usage/usage-diff-explorer";
 import { Link, useParams } from "@tanstack/react-router";
 import { getVolumeMountPath } from "~/client/lib/volume-path";
 import { logger } from "~/client/lib/logger";
@@ -125,7 +124,6 @@ export function SnapshotDetailsPage({ repositoryId, snapshotId, initialSnapshot 
 					<TabsList>
 						<TabsTrigger value="files">Files</TabsTrigger>
 						<TabsTrigger value="usage">Usage</TabsTrigger>
-						<TabsTrigger value="compare">Compare</TabsTrigger>
 					</TabsList>
 					<TabsContent value="files">
 						<SnapshotFileBrowser
@@ -150,9 +148,6 @@ export function SnapshotDetailsPage({ repositoryId, snapshotId, initialSnapshot 
 							repositorySize={data.size}
 							displayBasePath={backupSchedule ? getVolumeMountPath(backupSchedule.volume) : undefined}
 						/>
-					</TabsContent>
-					<TabsContent value="compare">
-						<UsageDiffExplorer repositoryId={repositoryId} snapshotId={snapshotId} />
 					</TabsContent>
 				</Tabs>
 			) : (
