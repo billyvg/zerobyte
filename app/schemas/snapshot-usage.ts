@@ -58,3 +58,45 @@ export const snapshotUsageMetaSchema = z.object({
 	appliedMinSize: z.number(),
 });
 export type SnapshotUsageMeta = z.infer<typeof snapshotUsageMetaSchema>;
+
+/**
+ * How one path's size changed between the two snapshots being compared.
+ *
+ * `added`/`removed` mean the path was only found on one side, not that it was
+ * necessarily created or deleted — it may simply have fallen below the size
+ * threshold one of the trees was pruned to. `meta.appliedMinSize` on either
+ * side is the tell.
+ */
+export const snapshotUsageDiffStatuses = ["added", "removed", "changed", "unchanged"] as const;
+export const snapshotUsageDiffStatusSchema = z.enum(snapshotUsageDiffStatuses);
+export type SnapshotUsageDiffStatus = (typeof snapshotUsageDiffStatuses)[number];
+
+export const snapshotUsageDiffEntrySchema = z.object({
+	path: z.string(),
+	name: z.string(),
+	type: z.enum(["file", "dir"]),
+	status: snapshotUsageDiffStatusSchema,
+	/** Size in the snapshot being viewed; 0 when the path doesn't exist there. */
+	currentSize: z.number(),
+	/** Size in the snapshot being compared against; 0 when the path doesn't exist there. */
+	againstSize: z.number(),
+	/** currentSize - againstSize. */
+	delta: z.number(),
+});
+export type SnapshotUsageDiffEntry = z.infer<typeof snapshotUsageDiffEntrySchema>;
+
+export const snapshotUsageDiffDirectorySchema = z.object({
+	path: z.string(),
+	existsInCurrent: z.boolean(),
+	existsInAgainst: z.boolean(),
+	currentSize: z.number(),
+	againstSize: z.number(),
+	delta: z.number(),
+});
+export type SnapshotUsageDiffDirectory = z.infer<typeof snapshotUsageDiffDirectorySchema>;
+
+export const snapshotUsageDiffMetaSchema = z.object({
+	current: snapshotUsageMetaSchema,
+	against: snapshotUsageMetaSchema,
+});
+export type SnapshotUsageDiffMeta = z.infer<typeof snapshotUsageDiffMetaSchema>;

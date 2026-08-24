@@ -29,6 +29,7 @@ import type { DumpPathKind, UpdateRepositoryBody } from "./repositories.dto";
 import { findCommonAncestor, normalizeAbsolutePath } from "@zerobyte/core/utils";
 import { prepareSnapshotDump } from "./helpers/dump";
 import { loadUsageTree } from "./helpers/snapshot-usage-store";
+import { diffUsageDirectory } from "./helpers/snapshot-usage-diff";
 import { emptyRepositoryStats, refreshStoredRepositoryStats } from "./helpers/repository-stats";
 import { asShortId, type ShortId } from "~/server/utils/branded";
 import { decryptRepositoryConfig, encryptRepositoryConfig } from "./repository-config-secrets";
@@ -406,6 +407,52 @@ const getSnapshotUsage = async (shortId: ShortId, snapshotId: string, options?: 
 		directory: indexed.directoryDetails.get(requestedPath) ?? null,
 		entries: allChildren.slice(0, limit),
 		totalEntries: allChildren.length,
+	};
+};
+
+/**
+ * Compares this snapshot's recorded usage tree against another snapshot's,
+ * one directory at a time, biggest change first.
+ *
+ * Like {@link getSnapshotUsage}, this never touches the repository — both
+ * trees are already stored.
+ */
+const getSnapshotUsageDiff = async (
+	shortId: ShortId,
+	snapshotId: string,
+	againstSnapshotId: string,
+	options?: { path?: string; limit?: number },
+) => {
+	const organizationId = getOrganizationId();
+	const repository = await findRepository(shortId);
+
+	if (!repository) {
+		throw new NotFoundError("Repository not found");
+	}
+
+	const current = loadUsageTree({ repositoryId: repository.id, organizationId, snapshotId });
+	const against = loadUsageTree({ repositoryId: repository.id, organizationId, snapshotId: againstSnapshotId });
+
+	if (!current || !against) {
+		const missing =
+			!current && !against ? ("both" as const) : !current ? ("current" as const) : ("against" as const);
+		return { status: "missing" as const, missing };
+	}
+
+	const requestedPath = options?.path
+		? normalizeAbsolutePath(options.path)
+		: (current.meta.roots[0] ?? against.meta.roots[0] ?? "/");
+	const limit = Math.min(1000, Math.max(1, options?.limit ?? 500));
+
+	const { directory, entries, totalEntries } = diffUsageDirectory(current, against, requestedPath, limit);
+
+	return {
+		status: "ready" as const,
+		meta: { current: current.meta, against: against.meta },
+		path: requestedPath,
+		directory,
+		entries,
+		totalEntries,
 	};
 };
 
@@ -884,6 +931,7 @@ export const repositoriesService = {
 	listSnapshots,
 	listSnapshotFiles,
 	getSnapshotUsage,
+	getSnapshotUsageDiff,
 	restoreSnapshot,
 	dumpSnapshot,
 	getSnapshotDetails,

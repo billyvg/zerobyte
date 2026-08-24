@@ -2455,6 +2455,77 @@ export type GetSnapshotUsageResponses = {
 
 export type GetSnapshotUsageResponse = GetSnapshotUsageResponses[keyof GetSnapshotUsageResponses];
 
+export type GetSnapshotUsageDiffData = {
+    body?: never;
+    path: {
+        shortId: string;
+        snapshotId: string;
+    };
+    query: {
+        against: string;
+        path?: string;
+        limit?: number;
+    };
+    url: '/api/v1/repositories/{shortId}/snapshots/{snapshotId}/usage/diff';
+};
+
+export type GetSnapshotUsageDiffResponses = {
+    /**
+     * Per-entry size deltas for a directory, largest change first
+     */
+    200: {
+        status: 'ready';
+        meta: {
+            current: {
+                source: 'backup' | 'scan';
+                scannedAt: number;
+                durationMs: number;
+                totalSize: number;
+                fileCount: number;
+                dirCount: number;
+                roots: Array<string>;
+                skipped: number;
+                appliedMinSize: number;
+            };
+            against: {
+                source: 'backup' | 'scan';
+                scannedAt: number;
+                durationMs: number;
+                totalSize: number;
+                fileCount: number;
+                dirCount: number;
+                roots: Array<string>;
+                skipped: number;
+                appliedMinSize: number;
+            };
+        };
+        path: string;
+        directory: {
+            path: string;
+            existsInCurrent: boolean;
+            existsInAgainst: boolean;
+            currentSize: number;
+            againstSize: number;
+            delta: number;
+        } | null;
+        entries: Array<{
+            path: string;
+            name: string;
+            type: 'file' | 'dir';
+            status: 'added' | 'removed' | 'changed' | 'unchanged';
+            currentSize: number;
+            againstSize: number;
+            delta: number;
+        }>;
+        totalEntries: number;
+    } | {
+        status: 'missing';
+        missing: 'current' | 'against' | 'both';
+    };
+};
+
+export type GetSnapshotUsageDiffResponse = GetSnapshotUsageDiffResponses[keyof GetSnapshotUsageDiffResponses];
+
 export type DumpSnapshotData = {
     body?: never;
     path: {
