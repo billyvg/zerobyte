@@ -1,0 +1,246 @@
+[
+	1,
+	2,
+	{
+		"time": "2026-08-28T13:07:52.556216891Z",
+		"tree": "a27bf852175aa54102d822a295f7acaded0c19eff8f7a99059858b7cec15b602",
+		"paths": ["/tmp/claude-0/-home-user-zerobyte/4239e486-7364-56fb-8f54-e9d23cb566d8/scratchpad/src"],
+		"hostname": "vm",
+		"username": "root",
+		"program_version": "restic 0.19.1",
+		"summary": {
+			"backup_start": "2026-08-28T13:07:52.556216891Z",
+			"backup_end": "2026-08-28T13:07:53.266408753Z",
+			"files_new": 4,
+			"files_changed": 0,
+			"files_unmodified": 0,
+			"dirs_new": 10,
+			"dirs_changed": 0,
+			"dirs_unmodified": 0,
+			"data_blobs": 3,
+			"tree_blobs": 11,
+			"data_added": 107784,
+			"data_added_packed": 106155,
+			"total_files_processed": 4,
+			"total_bytes_processed": 102500
+		}
+	},
+	[
+		{ "name": "/" },
+		[
+			{
+				"name": "tmp",
+				"asize": 0,
+				"dsize": 0,
+				"dev": 65024,
+				"ino": 229,
+				"nlink": 0,
+				"notreg": false,
+				"uid": 0,
+				"gid": 0,
+				"mode": 1023,
+				"mtime": 1787922461
+			},
+			[
+				{
+					"name": "claude-0",
+					"asize": 0,
+					"dsize": 0,
+					"dev": 65024,
+					"ino": 1884172,
+					"nlink": 0,
+					"notreg": false,
+					"uid": 0,
+					"gid": 0,
+					"mode": 448,
+					"mtime": 1787505722
+				},
+				[
+					{
+						"name": "-home-user-zerobyte",
+						"asize": 0,
+						"dsize": 0,
+						"dev": 65024,
+						"ino": 1884173,
+						"nlink": 0,
+						"notreg": false,
+						"uid": 0,
+						"gid": 0,
+						"mode": 448,
+						"mtime": 1787505722
+					},
+					[
+						{
+							"name": "4239e486-7364-56fb-8f54-e9d23cb566d8",
+							"asize": 0,
+							"dsize": 0,
+							"dev": 65024,
+							"ino": 1884174,
+							"nlink": 0,
+							"notreg": false,
+							"uid": 0,
+							"gid": 0,
+							"mode": 448,
+							"mtime": 1787505730
+						},
+						[
+							{
+								"name": "scratchpad",
+								"asize": 0,
+								"dsize": 0,
+								"dev": 65024,
+								"ino": 1884175,
+								"nlink": 0,
+								"notreg": false,
+								"uid": 0,
+								"gid": 0,
+								"mode": 448,
+								"mtime": 1787922469
+							},
+							[
+								{
+									"name": "src",
+									"asize": 0,
+									"dsize": 0,
+									"dev": 65024,
+									"ino": 2138244,
+									"nlink": 0,
+									"notreg": false,
+									"uid": 0,
+									"gid": 0,
+									"mode": 493,
+									"mtime": 1787922469
+								},
+								[
+									{
+										"name": "docs",
+										"asize": 0,
+										"dsize": 0,
+										"dev": 65024,
+										"ino": 2138246,
+										"nlink": 0,
+										"notreg": false,
+										"uid": 0,
+										"gid": 0,
+										"mode": 493,
+										"mtime": 1787922469
+									},
+									{
+										"name": "a.txt",
+										"asize": 2000,
+										"dsize": 2048,
+										"dev": 65024,
+										"ino": 2138250,
+										"nlink": 1,
+										"notreg": false,
+										"uid": 0,
+										"gid": 0,
+										"mode": 420,
+										"mtime": 1787922469
+									},
+									[
+										{
+											"name": "deep",
+											"asize": 0,
+											"dsize": 0,
+											"dev": 65024,
+											"ino": 2138247,
+											"nlink": 0,
+											"notreg": false,
+											"uid": 0,
+											"gid": 0,
+											"mode": 493,
+											"mtime": 1787922469
+										},
+										{
+											"name": "b.txt",
+											"asize": 500,
+											"dsize": 512,
+											"dev": 65024,
+											"ino": 2138251,
+											"nlink": 1,
+											"notreg": false,
+											"uid": 0,
+											"gid": 0,
+											"mode": 420,
+											"mtime": 1787922469
+										}
+									]
+								],
+								[
+									{
+										"name": "empty",
+										"asize": 0,
+										"dsize": 0,
+										"dev": 65024,
+										"ino": 2138248,
+										"nlink": 0,
+										"notreg": false,
+										"uid": 0,
+										"gid": 0,
+										"mode": 493,
+										"mtime": 1787922469
+									}
+								],
+								{
+									"name": "link",
+									"asize": 0,
+									"dsize": 0,
+									"dev": 65024,
+									"ino": 2138253,
+									"nlink": 1,
+									"notreg": true,
+									"uid": 0,
+									"gid": 0,
+									"mode": 511,
+									"mtime": 1787922469
+								},
+								[
+									{
+										"name": "media",
+										"asize": 0,
+										"dsize": 0,
+										"dev": 65024,
+										"ino": 2138245,
+										"nlink": 0,
+										"notreg": false,
+										"uid": 0,
+										"gid": 0,
+										"mode": 493,
+										"mtime": 1787922469
+									},
+									{
+										"name": "movie.iso",
+										"asize": 100000,
+										"dsize": 100352,
+										"dev": 65024,
+										"ino": 2138249,
+										"nlink": 1,
+										"notreg": false,
+										"uid": 0,
+										"gid": 0,
+										"mode": 420,
+										"mtime": 1787922469
+									}
+								],
+								{
+									"name": "zero.bin",
+									"asize": 0,
+									"dsize": 0,
+									"dev": 65024,
+									"ino": 2138252,
+									"nlink": 1,
+									"notreg": false,
+									"uid": 0,
+									"gid": 0,
+									"mode": 420,
+									"mtime": 1787922469
+								}
+							]
+						]
+					]
+				]
+			]
+		]
+	]
+]

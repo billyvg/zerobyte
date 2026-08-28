@@ -319,16 +319,22 @@ const snapshotUsageReadyResponse = z.object({
 });
 
 /**
- * No tree stored for this snapshot: it predates usage capture, or it was taken
- * on a remote agent. Deliberately a 200 with a status rather than a 404, so the
- * UI can render an explanation instead of an error.
+ * Nothing cached for this snapshot yet. Deliberately a 200 with a status rather
+ * than a 404, so the UI can offer to read it instead of rendering an error.
  */
 const snapshotUsageMissingResponse = z.object({
 	status: z.literal("missing"),
 });
 
+/** A read is already in flight; the UI can follow the task for progress. */
+const snapshotUsageScanningResponse = z.object({
+	status: z.literal("scanning"),
+	taskId: z.string(),
+});
+
 const getSnapshotUsageResponse = z.discriminatedUnion("status", [
 	snapshotUsageReadyResponse,
+	snapshotUsageScanningResponse,
 	snapshotUsageMissingResponse,
 ]);
 
@@ -349,6 +355,29 @@ export const getSnapshotUsageDto = describeRoute({
 			content: {
 				"application/json": {
 					schema: resolver(getSnapshotUsageResponse),
+				},
+			},
+		},
+	},
+});
+
+const scanSnapshotUsageResponse = z.object({
+	taskId: z.string(),
+	status: z.enum(["started", "already-running"]),
+});
+
+export type ScanSnapshotUsageDto = z.infer<typeof scanSnapshotUsageResponse>;
+
+export const scanSnapshotUsageDto = describeRoute({
+	description: "Read a snapshot's directory sizes from the repository with restic",
+	tags: ["Repositories"],
+	operationId: "scanSnapshotUsage",
+	responses: {
+		200: {
+			description: "Usage scan started, or already running",
+			content: {
+				"application/json": {
+					schema: resolver(scanSnapshotUsageResponse),
 				},
 			},
 		},

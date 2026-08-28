@@ -1,20 +1,5 @@
 import { z } from "zod";
 
-/**
- * Where a snapshot's size tree came from.
- *
- * The two are not interchangeable and the UI must say which it is showing:
- *
- * - `backup` — walked from the locally mounted source while the backup ran.
- *   Costs nothing at the repository, and includes paths the schedule excludes,
- *   so its total is what was *on disk*, not what was stored.
- * - `scan` — read back out of the repository with `restic ls`. Describes only
- *   what the snapshot actually contains.
- */
-export const snapshotUsageSources = ["backup", "scan"] as const;
-export const snapshotUsageSourceSchema = z.enum(snapshotUsageSources);
-export type SnapshotUsageSource = (typeof snapshotUsageSources)[number];
-
 export const snapshotUsageEntrySchema = z.object({
 	path: z.string(),
 	name: z.string(),
@@ -45,7 +30,7 @@ export const snapshotUsageDirectorySchema = z.object({
 export type SnapshotUsageDirectory = z.infer<typeof snapshotUsageDirectorySchema>;
 
 export const snapshotUsageMetaSchema = z.object({
-	source: snapshotUsageSourceSchema,
+	/** When the tree was read out of the repository. */
 	scannedAt: z.number(),
 	durationMs: z.number(),
 	totalSize: z.number(),

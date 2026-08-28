@@ -28,7 +28,7 @@ import { safeSpawn } from "@zerobyte/core/node";
 import type { DumpPathKind, UpdateRepositoryBody } from "./repositories.dto";
 import { findCommonAncestor, normalizeAbsolutePath } from "@zerobyte/core/utils";
 import { prepareSnapshotDump } from "./helpers/dump";
-import { loadUsageTree } from "./helpers/snapshot-usage-store";
+import { deleteAllUsageTrees, loadUsageTree } from "./helpers/snapshot-usage-store";
 import { emptyRepositoryStats, refreshStoredRepositoryStats } from "./helpers/repository-stats";
 import { asShortId, type ShortId } from "~/server/utils/branded";
 import { decryptRepositoryConfig, encryptRepositoryConfig } from "./repository-config-secrets";
@@ -251,6 +251,7 @@ const deleteRepository = async (shortId: ShortId) => {
 		);
 
 	cache.delByPrefix(cacheKeys.repository.all(repository.id));
+	deleteAllUsageTrees(repository.id);
 };
 
 /**
@@ -382,16 +383,16 @@ const listSnapshotFiles = async (
  * is safe to call as fast as somebody can click through a drill-down.
  */
 const getSnapshotUsage = async (shortId: ShortId, snapshotId: string, options?: { path?: string; limit?: number }) => {
-	const organizationId = getOrganizationId();
 	const repository = await findRepository(shortId);
 
 	if (!repository) {
 		throw new NotFoundError("Repository not found");
 	}
 
-	const indexed = loadUsageTree({ repositoryId: repository.id, organizationId, snapshotId });
+	const indexed = loadUsageTree(repository.id, snapshotId);
 	if (!indexed) {
-		return { status: "missing" as const };
+		const active = commands.createScanUsage({ repository, snapshotId }).findActive();
+		return active ? { status: "scanning" as const, taskId: active.id } : { status: "missing" as const };
 	}
 
 	const requestedPath = options?.path ? normalizeAbsolutePath(options.path) : (indexed.meta.roots[0] ?? "/");
@@ -407,6 +408,17 @@ const getSnapshotUsage = async (shortId: ShortId, snapshotId: string, options?: 
 		entries: allChildren.slice(0, limit),
 		totalEntries: allChildren.length,
 	};
+};
+
+/** Kicks off a `restic ls --ncdu` read for a snapshot that has no cached tree. */
+const startSnapshotUsageScan = async (shortId: ShortId, snapshotId: string) => {
+	const repository = await findRepository(shortId);
+
+	if (!repository) {
+		throw new NotFoundError("Repository not found");
+	}
+
+	return commands.createScanUsage({ repository, snapshotId }).start();
 };
 
 const restoreSnapshot = async (
@@ -884,6 +896,7 @@ export const repositoriesService = {
 	listSnapshots,
 	listSnapshotFiles,
 	getSnapshotUsage,
+	startSnapshotUsageScan,
 	restoreSnapshot,
 	dumpSnapshot,
 	getSnapshotDetails,

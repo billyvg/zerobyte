@@ -1,8 +1,9 @@
 import { useMemo, useState } from "react";
-import { keepPreviousData, useQuery } from "@tanstack/react-query";
-import { ArrowUp, HardDrive, Info } from "lucide-react";
+import { keepPreviousData, useMutation, useQuery } from "@tanstack/react-query";
+import { ArrowUp, Info } from "lucide-react";
+import { toast } from "sonner";
 import { isPathWithin, normalizeAbsolutePath } from "@zerobyte/core/utils";
-import { getSnapshotUsageOptions } from "~/client/api-client/@tanstack/react-query.gen";
+import { getSnapshotUsageOptions, scanSnapshotUsageMutation } from "~/client/api-client/@tanstack/react-query.gen";
 import { Card, CardContent, CardHeader, CardTitle } from "~/client/components/ui/card";
 import { Button } from "~/client/components/ui/button";
 import { ByteSize } from "~/client/components/bytes-size";
@@ -15,6 +16,7 @@ import type { SnapshotUsageEntry } from "~/schemas/snapshot-usage";
 import { UsageRow } from "./usage-row";
 import { UsageBreadcrumb } from "./usage-breadcrumb";
 import { ExcludeDialog } from "./exclude-dialog";
+import { UsageEmptyState, UsageScanningState } from "./usage-empty-state";
 
 type OwningSchedule = {
 	shortId: string;
@@ -32,22 +34,6 @@ type Props = {
 	displayBasePath?: string;
 };
 
-const UsageEmptyState = () => (
-	<Card>
-		<CardContent className="flex flex-col items-center justify-center py-12 text-center">
-			<HardDrive className="mb-4 h-12 w-12 text-muted-foreground" />
-			<p className="font-semibold">No usage recorded for this snapshot</p>
-			<p className="mt-2 max-w-lg text-sm text-muted-foreground">
-				Usage is measured while a backup runs, by walking the source on disk. Snapshots taken before this was
-				available, and snapshots taken by a remote agent, do not have it.
-			</p>
-			<p className="mt-2 max-w-lg text-sm text-muted-foreground">
-				The next run of this backup job will record it.
-			</p>
-		</CardContent>
-	</Card>
-);
-
 export const UsageExplorer = ({ repositoryId, snapshotId, schedule, repositorySize, displayBasePath }: Props) => {
 	const [path, setPath] = useState<string | undefined>(undefined);
 	const [entryToExclude, setEntryToExclude] = useState<SnapshotUsageEntry | null>(null);
@@ -61,6 +47,15 @@ export const UsageExplorer = ({ repositoryId, snapshotId, schedule, repositorySi
 		// Keeps the current directory on screen while a new one loads, instead of
 		// unmounting it for a skeleton — that swap is what reads as a "flash".
 		placeholderData: keepPreviousData,
+		// While a read is in flight, poll so the view flips over on its own.
+		refetchInterval: (query) => (query.state.data?.status === "scanning" ? 2000 : false),
+	});
+
+	const startScan = useMutation({
+		...scanSnapshotUsageMutation(),
+		onError: (mutationError) => {
+			toast.error("Could not start the measurement", { description: parseError(mutationError)?.message });
+		},
 	});
 
 	const root = data?.status === "ready" ? (data.meta.roots[0] ?? "/") : "/";
@@ -110,7 +105,16 @@ export const UsageExplorer = ({ repositoryId, snapshotId, schedule, repositorySi
 	}
 
 	if (!data || data.status === "missing") {
-		return <UsageEmptyState />;
+		return (
+			<UsageEmptyState
+				isStarting={startScan.isPending}
+				onScan={() => startScan.mutate({ path: { shortId: repositoryId, snapshotId } })}
+			/>
+		);
+	}
+
+	if (data.status === "scanning") {
+		return <UsageScanningState />;
 	}
 
 	const { meta, directory, entries, totalEntries } = data;
@@ -179,8 +183,9 @@ export const UsageExplorer = ({ repositoryId, snapshotId, schedule, repositorySi
 						<Info className="mt-0.5 h-3.5 w-3.5 shrink-0" />
 						<div className="space-y-1">
 							<p>
-								Sizes are the original file sizes on disk, before deduplication and compression — the
-								same thing <span className="font-mono">du</span> reports.
+								Read from the snapshot with restic, so these are the snapshot's own contents. Sizes are
+								the original file sizes, before deduplication and compression — the same thing{" "}
+								<span className="font-mono">du</span> reports.
 								{repositorySize !== undefined && (
 									<>
 										{" "}
@@ -188,13 +193,6 @@ export const UsageExplorer = ({ repositoryId, snapshotId, schedule, repositorySi
 									</>
 								)}
 							</p>
-							{meta.source === "backup" && (
-								<p>
-									Measured from the source while the backup ran, so this includes paths the job
-									excludes. The gap against what was actually stored is what your exclusions are
-									saving.
-								</p>
-							)}
 							{meta.skipped > 0 && <p>{meta.skipped.toLocaleString()} entries could not be read.</p>}
 						</div>
 					</div>

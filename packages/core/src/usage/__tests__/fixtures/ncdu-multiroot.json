@@ -1,0 +1,196 @@
+[
+	1,
+	2,
+	{
+		"time": "2026-08-28T13:08:31.502928305Z",
+		"tree": "fa919e2109e0b233e8a59741f482ee52f0a3b1565c9a1e582129c7a0f2c026a4",
+		"paths": [
+			"/tmp/claude-0/-home-user-zerobyte/4239e486-7364-56fb-8f54-e9d23cb566d8/scratchpad/src2",
+			"/tmp/claude-0/-home-user-zerobyte/4239e486-7364-56fb-8f54-e9d23cb566d8/scratchpad/uni"
+		],
+		"hostname": "vm",
+		"username": "root",
+		"tags": ["multi"],
+		"program_version": "restic 0.19.1",
+		"summary": {
+			"backup_start": "2026-08-28T13:08:31.502928305Z",
+			"backup_end": "2026-08-28T13:08:32.184961297Z",
+			"files_new": 2,
+			"files_changed": 0,
+			"files_unmodified": 0,
+			"dirs_new": 9,
+			"dirs_changed": 0,
+			"dirs_unmodified": 0,
+			"data_blobs": 2,
+			"tree_blobs": 10,
+			"data_added": 4940,
+			"data_added_packed": 4203,
+			"total_files_processed": 2,
+			"total_bytes_processed": 1000
+		}
+	},
+	[
+		{ "name": "/" },
+		[
+			{
+				"name": "tmp",
+				"asize": 0,
+				"dsize": 0,
+				"dev": 65024,
+				"ino": 229,
+				"nlink": 0,
+				"notreg": false,
+				"uid": 0,
+				"gid": 0,
+				"mode": 1023,
+				"mtime": 1787922473
+			},
+			[
+				{
+					"name": "claude-0",
+					"asize": 0,
+					"dsize": 0,
+					"dev": 65024,
+					"ino": 1884172,
+					"nlink": 0,
+					"notreg": false,
+					"uid": 0,
+					"gid": 0,
+					"mode": 448,
+					"mtime": 1787505722
+				},
+				[
+					{
+						"name": "-home-user-zerobyte",
+						"asize": 0,
+						"dsize": 0,
+						"dev": 65024,
+						"ino": 1884173,
+						"nlink": 0,
+						"notreg": false,
+						"uid": 0,
+						"gid": 0,
+						"mode": 448,
+						"mtime": 1787505722
+					},
+					[
+						{
+							"name": "4239e486-7364-56fb-8f54-e9d23cb566d8",
+							"asize": 0,
+							"dsize": 0,
+							"dev": 65024,
+							"ino": 1884174,
+							"nlink": 0,
+							"notreg": false,
+							"uid": 0,
+							"gid": 0,
+							"mode": 448,
+							"mtime": 1787505730
+						},
+						[
+							{
+								"name": "scratchpad",
+								"asize": 0,
+								"dsize": 0,
+								"dev": 65024,
+								"ino": 1884175,
+								"nlink": 0,
+								"notreg": false,
+								"uid": 0,
+								"gid": 0,
+								"mode": 448,
+								"mtime": 1787922511
+							},
+							[
+								{
+									"name": "src2",
+									"asize": 0,
+									"dsize": 0,
+									"dev": 65024,
+									"ino": 2138573,
+									"nlink": 0,
+									"notreg": false,
+									"uid": 0,
+									"gid": 0,
+									"mode": 493,
+									"mtime": 1787922511
+								},
+								[
+									{
+										"name": "other",
+										"asize": 0,
+										"dsize": 0,
+										"dev": 65024,
+										"ino": 2138574,
+										"nlink": 0,
+										"notreg": false,
+										"uid": 0,
+										"gid": 0,
+										"mode": 493,
+										"mtime": 1787922511
+									},
+									{
+										"name": "c.txt",
+										"asize": 700,
+										"dsize": 1024,
+										"dev": 65024,
+										"ino": 2138575,
+										"nlink": 1,
+										"notreg": false,
+										"uid": 0,
+										"gid": 0,
+										"mode": 420,
+										"mtime": 1787922511
+									}
+								]
+							],
+							[
+								{
+									"name": "uni",
+									"asize": 0,
+									"dsize": 0,
+									"dev": 65024,
+									"ino": 2138576,
+									"nlink": 0,
+									"notreg": false,
+									"uid": 0,
+									"gid": 0,
+									"mode": 493,
+									"mtime": 1787922511
+								},
+								[
+									{
+										"name": "ünï dir",
+										"asize": 0,
+										"dsize": 0,
+										"dev": 65024,
+										"ino": 2138577,
+										"nlink": 0,
+										"notreg": false,
+										"uid": 0,
+										"gid": 0,
+										"mode": 493,
+										"mtime": 1787922511
+									},
+									{
+										"name": "spaced \"name\".txt",
+										"asize": 300,
+										"dsize": 512,
+										"dev": 65024,
+										"ino": 2138578,
+										"nlink": 1,
+										"notreg": false,
+										"uid": 0,
+										"gid": 0,
+										"mode": 420,
+										"mtime": 1787922511
+									}
+								]
+							]
+						]
+					]
+				]
+			]
+		]
+	]
+]

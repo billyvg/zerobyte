@@ -28,11 +28,6 @@
 			"import": "./src/usage/index.ts",
 			"default": "./src/usage/index.ts"
 		},
-		"./usage/node": {
-			"types": "./src/usage/node.ts",
-			"import": "./src/usage/node.ts",
-			"default": "./src/usage/node.ts"
-		},
 		"./node": {
 			"types": "./src/node/index.ts",
 			"import": "./src/node/index.ts",

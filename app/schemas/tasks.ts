@@ -19,6 +19,7 @@ export const taskKinds = [
 	"doctor",
 	"mirrorSync",
 	"forget",
+	"snapshotUsage",
 ] as const;
 export const taskOutcomes = ["success", "warning", "error", "cancelled", "stale"] as const;
 export const TASK_PERSISTENCE_FORMAT_VERSION = 1 as const;
@@ -71,6 +72,11 @@ export const taskInputSchema = z.discriminatedUnion("kind", [
 		repositoryId: z.string(),
 	}),
 	z.object({
+		kind: z.literal("snapshotUsage"),
+		repositoryId: z.string(),
+		snapshotId: z.string(),
+	}),
+	z.object({
 		kind: z.literal("mirrorSync"),
 		scheduleId: z.number(),
 		scheduleShortId: z.string(),
@@ -97,6 +103,10 @@ export const taskProgressSchema = z.discriminatedUnion("kind", [
 		kind: z.literal("mirrorSync"),
 		phase: mirrorSyncPhaseSchema,
 		message: z.string().nullable(),
+	}),
+	z.object({
+		kind: z.literal("snapshotUsage"),
+		bytesRead: z.number(),
 	}),
 ]);
 
@@ -131,6 +141,12 @@ export const taskResultSchema = z.discriminatedUnion("kind", [
 	}),
 	z.object({
 		kind: z.literal("forget"),
+	}),
+	z.object({
+		kind: z.literal("snapshotUsage"),
+		totalSize: z.number(),
+		fileCount: z.number(),
+		dirCount: z.number(),
 	}),
 ]);
 

@@ -1,28 +1,40 @@
 import { gunzipSync, gzipSync } from "node:zlib";
-import { and, desc, eq, inArray, notInArray } from "drizzle-orm";
-import { USAGE_TREE_FORMAT_VERSION, type UsageTree } from "@zerobyte/core/usage";
 import { logger } from "@zerobyte/core/node";
-import { db } from "~/server/db/db";
-import { snapshotUsageScansTable } from "~/server/db/schema";
-import type { ShortId } from "~/server/utils/branded";
-import type {
-	SnapshotUsageDirectory,
-	SnapshotUsageEntry,
-	SnapshotUsageMeta,
-	SnapshotUsageSource,
-} from "~/schemas/snapshot-usage";
-import { parentPath } from "@zerobyte/core/usage";
+import { parentPath, USAGE_TREE_FORMAT_VERSION, type UsageTree } from "@zerobyte/core/usage";
+import { cache } from "../../../utils/cache";
+import type { SnapshotUsageDirectory, SnapshotUsageEntry, SnapshotUsageMeta } from "~/schemas/snapshot-usage";
 
 /**
- * How many trees to keep per schedule. Every backup writes one, so without a
- * ceiling a nightly job would add roughly a gigabyte a year to the database.
+ * Usage trees live in the derived cache, not in the application database.
+ *
+ * Everything here is recomputable from the repository with `restic ls --ncdu`,
+ * so it is a cache and nothing more — restic stays the single source of truth
+ * for what a snapshot contains. Dropping `cache.db` loses nothing but time.
+ *
+ * The key sits outside the `repo:<id>:` namespace on purpose: that prefix is
+ * cleared after every backup, and a snapshot's contents never change once
+ * written, so there is no reason to recompute a tree just because a *different*
+ * snapshot was created.
  */
-export const DEFAULT_USAGE_TREE_RETENTION = 10;
+const usageKey = (repositoryId: string, snapshotId: string) =>
+	`snapshot-usage:v${USAGE_TREE_FORMAT_VERSION}:${repositoryId}:${snapshotId}`;
+
+const usagePrefix = (repositoryId: string) => `snapshot-usage:v${USAGE_TREE_FORMAT_VERSION}:${repositoryId}:`;
+
+/** Snapshots are immutable, so a stored tree only expires to bound disk use. */
+const CACHE_TTL_SECONDS = 60 * 60 * 24 * 90;
 
 /** Inflating and indexing a multi-megabyte tree per request would be wasteful. */
-const CACHE_SIZE = 2;
+const MEMORY_CACHE_SIZE = 2;
 
-type IndexedTree = {
+type StoredTree = {
+	scannedAt: number;
+	durationMs: number;
+	/** Gzipped JSON, base64 encoded: the cache stores JSON strings. */
+	gzip: string;
+};
+
+export type IndexedTree = {
 	key: string;
 	scannedAt: number;
 	meta: SnapshotUsageMeta;
@@ -32,41 +44,32 @@ type IndexedTree = {
 	directoryDetails: Map<string, SnapshotUsageDirectory>;
 };
 
-const cache: IndexedTree[] = [];
+const memoryCache: IndexedTree[] = [];
 
-const cacheKeyOf = (repositoryId: string, snapshotId: string) => `${repositoryId}:${snapshotId}`;
-
-const readCache = (key: string, scannedAt: number) => {
-	const index = cache.findIndex((entry) => entry.key === key && entry.scannedAt === scannedAt);
+const readMemoryCache = (key: string, scannedAt: number) => {
+	const index = memoryCache.findIndex((entry) => entry.key === key && entry.scannedAt === scannedAt);
 	if (index < 0) return undefined;
 
-	const [entry] = cache.splice(index, 1);
-	if (entry) cache.unshift(entry);
+	const [entry] = memoryCache.splice(index, 1);
+	if (entry) memoryCache.unshift(entry);
 	return entry;
 };
 
-const writeCache = (entry: IndexedTree) => {
-	cache.unshift(entry);
-	cache.length = Math.min(cache.length, CACHE_SIZE);
+const writeMemoryCache = (entry: IndexedTree) => {
+	memoryCache.unshift(entry);
+	memoryCache.length = Math.min(memoryCache.length, MEMORY_CACHE_SIZE);
 };
 
 export const clearSnapshotUsageCache = () => {
-	cache.length = 0;
+	memoryCache.length = 0;
 };
 
 const share = (value: number, total: number) => (total > 0 ? value / total : 0);
 
-const buildIndex = (
-	key: string,
-	scannedAt: number,
-	source: SnapshotUsageSource,
-	durationMs: number,
-	tree: UsageTree,
-) => {
+const buildIndex = (key: string, stored: StoredTree, tree: UsageTree): IndexedTree => {
 	const meta: SnapshotUsageMeta = {
-		source,
-		scannedAt,
-		durationMs,
+		scannedAt: stored.scannedAt,
+		durationMs: stored.durationMs,
 		totalSize: tree.totals.size,
 		fileCount: tree.totals.fileCount,
 		dirCount: tree.totals.dirCount,
@@ -75,8 +78,8 @@ const buildIndex = (
 		appliedMinSize: tree.appliedMinSize,
 	};
 
-	const directories = new Map<string, SnapshotUsageEntry>();
 	const directoryDetails = new Map<string, SnapshotUsageDirectory>();
+	const directories: SnapshotUsageEntry[] = [];
 	const bySize = new Map<string, number>();
 
 	for (const dir of tree.dirs) {
@@ -91,7 +94,7 @@ const buildIndex = (
 			maxMtime: dir.maxMtime,
 			truncatedChildren: dir.truncatedChildren,
 		});
-		directories.set(dir.path, {
+		directories.push({
 			path: dir.path,
 			name: dir.name,
 			type: "dir",
@@ -104,24 +107,6 @@ const buildIndex = (
 		});
 	}
 
-	const children = new Map<string, SnapshotUsageEntry[]>();
-
-	const addChild = (entry: SnapshotUsageEntry) => {
-		const parent = parentPath(entry.path);
-		if (parent === null) return;
-
-		const bucket = children.get(parent);
-		if (bucket) {
-			bucket.push(entry);
-		} else {
-			children.set(parent, [entry]);
-		}
-	};
-
-	for (const entry of directories.values()) {
-		addChild(entry);
-	}
-
 	const files: SnapshotUsageEntry[] = tree.files.map((file) => ({
 		path: file.path,
 		name: file.path.slice(file.path.lastIndexOf("/") + 1),
@@ -132,8 +117,15 @@ const buildIndex = (
 		maxMtime: file.mtime,
 	}));
 
-	for (const file of files) {
-		addChild(file);
+	const children = new Map<string, SnapshotUsageEntry[]>();
+
+	for (const entry of [...directories, ...files]) {
+		const parent = parentPath(entry.path);
+		if (parent === null) continue;
+
+		const bucket = children.get(parent);
+		if (bucket) bucket.push(entry);
+		else children.set(parent, [entry]);
 	}
 
 	for (const [parent, bucket] of children) {
@@ -144,178 +136,57 @@ const buildIndex = (
 		bucket.sort((a, b) => b.size - a.size);
 	}
 
-	return {
-		key,
-		scannedAt,
-		meta,
-		children,
-		directoryDetails,
-	} satisfies IndexedTree;
+	return { key, scannedAt: stored.scannedAt, meta, children, directoryDetails };
 };
 
-export type SaveUsageTreeParams = {
+export const saveUsageTree = (params: {
 	repositoryId: string;
-	organizationId: string;
 	snapshotId: string;
-	scheduleShortId?: ShortId | null;
-	source: SnapshotUsageSource;
 	durationMs: number;
 	tree: UsageTree;
-};
+}) => {
+	// Directory-path JSON compresses roughly ten to one, which keeps a large
+	// snapshot's tree to a few hundred kilobytes in the cache.
+	const gzip = gzipSync(Buffer.from(JSON.stringify(params.tree), "utf-8")).toString("base64");
 
-export const saveUsageTree = (params: SaveUsageTreeParams) => {
-	const compressed = gzipSync(Buffer.from(JSON.stringify(params.tree), "utf-8"));
-	const now = Date.now();
-
-	db.insert(snapshotUsageScansTable)
-		.values({
-			repositoryId: params.repositoryId,
-			organizationId: params.organizationId,
-			snapshotId: params.snapshotId,
-			scheduleShortId: params.scheduleShortId ?? null,
-			formatVersion: USAGE_TREE_FORMAT_VERSION,
-			source: params.source,
-			totalSize: params.tree.totals.size,
-			fileCount: params.tree.totals.fileCount,
-			dirCount: params.tree.totals.dirCount,
-			scannedAt: now,
-			durationMs: params.durationMs,
-			tree: compressed,
-		})
-		.onConflictDoUpdate({
-			target: [snapshotUsageScansTable.repositoryId, snapshotUsageScansTable.snapshotId],
-			set: {
-				scheduleShortId: params.scheduleShortId ?? null,
-				formatVersion: USAGE_TREE_FORMAT_VERSION,
-				source: params.source,
-				totalSize: params.tree.totals.size,
-				fileCount: params.tree.totals.fileCount,
-				dirCount: params.tree.totals.dirCount,
-				scannedAt: now,
-				durationMs: params.durationMs,
-				tree: compressed,
-			},
-		})
-		.run();
-
+	const stored: StoredTree = { scannedAt: Date.now(), durationMs: params.durationMs, gzip };
+	cache.set(usageKey(params.repositoryId, params.snapshotId), stored, CACHE_TTL_SECONDS);
 	clearSnapshotUsageCache();
 };
 
-/**
- * Keeps the newest `keep` trees for a schedule and drops the rest.
- *
- * Scan-sourced trees are exempt: those were paid for with reads against the
- * repository, sometimes a metered one, so they are never evicted automatically.
- */
-export const pruneUsageTrees = (params: { organizationId: string; scheduleShortId: ShortId; keep?: number }) => {
-	const keep = params.keep ?? DEFAULT_USAGE_TREE_RETENTION;
-
-	const survivors = db
-		.select({ id: snapshotUsageScansTable.id })
-		.from(snapshotUsageScansTable)
-		.where(
-			and(
-				eq(snapshotUsageScansTable.organizationId, params.organizationId),
-				eq(snapshotUsageScansTable.scheduleShortId, params.scheduleShortId),
-				eq(snapshotUsageScansTable.source, "backup"),
-			),
-		)
-		.orderBy(desc(snapshotUsageScansTable.scannedAt))
-		.limit(keep)
-		.all()
-		.map((row) => row.id);
-
-	const deleted = db
-		.delete(snapshotUsageScansTable)
-		.where(
-			and(
-				eq(snapshotUsageScansTable.organizationId, params.organizationId),
-				eq(snapshotUsageScansTable.scheduleShortId, params.scheduleShortId),
-				eq(snapshotUsageScansTable.source, "backup"),
-				survivors.length > 0 ? notInArray(snapshotUsageScansTable.id, survivors) : undefined,
-			),
-		)
-		.returning({ id: snapshotUsageScansTable.id })
-		.all();
-
-	if (deleted.length > 0) {
-		logger.debug(`Pruned ${deleted.length} usage tree(s) for schedule ${params.scheduleShortId}`);
-		clearSnapshotUsageCache();
-	}
-
-	return deleted.length;
-};
-
 export const deleteUsageTrees = (repositoryId: string, snapshotIds: string[]) => {
-	if (snapshotIds.length === 0) return 0;
-
-	const deleted = db
-		.delete(snapshotUsageScansTable)
-		.where(
-			and(
-				eq(snapshotUsageScansTable.repositoryId, repositoryId),
-				inArray(snapshotUsageScansTable.snapshotId, snapshotIds),
-			),
-		)
-		.returning({ id: snapshotUsageScansTable.id })
-		.all();
-
-	if (deleted.length > 0) clearSnapshotUsageCache();
-
-	return deleted.length;
+	for (const snapshotId of snapshotIds) {
+		cache.del(usageKey(repositoryId, snapshotId));
+	}
+	clearSnapshotUsageCache();
 };
 
-export const findUsageTreeRow = (params: { repositoryId: string; organizationId: string; snapshotId: string }) =>
-	db
-		.select()
-		.from(snapshotUsageScansTable)
-		.where(
-			and(
-				eq(snapshotUsageScansTable.repositoryId, params.repositoryId),
-				eq(snapshotUsageScansTable.organizationId, params.organizationId),
-				eq(snapshotUsageScansTable.snapshotId, params.snapshotId),
-			),
-		)
-		.get();
+/** Drops every stored tree for a repository, e.g. when the repository is removed. */
+export const deleteAllUsageTrees = (repositoryId: string) => {
+	cache.delByPrefix(usagePrefix(repositoryId));
+	clearSnapshotUsageCache();
+};
 
-/**
- * Loads a snapshot's tree, inflated and indexed for drill-down.
- *
- * Returns undefined when there is nothing stored, or when what is stored was
- * written by an older format version — a stale tree is worse than none, because
- * it would show numbers the current code cannot interpret.
- */
-export const loadUsageTree = (params: {
-	repositoryId: string;
-	organizationId: string;
-	snapshotId: string;
-}): IndexedTree | undefined => {
-	const row = findUsageTreeRow(params);
-	if (!row) return undefined;
+/** Loads a snapshot's tree, inflated and indexed for drill-down. */
+export const loadUsageTree = (repositoryId: string, snapshotId: string): IndexedTree | undefined => {
+	const key = usageKey(repositoryId, snapshotId);
+	const stored = cache.get<StoredTree>(key);
+	if (!stored) return undefined;
 
-	if (row.formatVersion !== USAGE_TREE_FORMAT_VERSION) {
-		logger.debug(
-			`Ignoring usage tree for snapshot ${params.snapshotId}: format ${row.formatVersion}, expected ${USAGE_TREE_FORMAT_VERSION}`,
-		);
-		return undefined;
-	}
-
-	const key = cacheKeyOf(params.repositoryId, params.snapshotId);
-	const cached = readCache(key, row.scannedAt);
+	const cached = readMemoryCache(key, stored.scannedAt);
 	if (cached) return cached;
 
 	let tree: UsageTree;
 	try {
-		tree = JSON.parse(gunzipSync(Buffer.from(row.tree)).toString("utf-8")) as UsageTree;
+		tree = JSON.parse(gunzipSync(Buffer.from(stored.gzip, "base64")).toString("utf-8")) as UsageTree;
 	} catch (error) {
-		logger.error(`Failed to read usage tree for snapshot ${params.snapshotId}: ${String(error)}`);
+		logger.error(`Failed to read cached usage tree for snapshot ${snapshotId}: ${String(error)}`);
+		cache.del(key);
 		return undefined;
 	}
 
-	const indexed = buildIndex(key, row.scannedAt, row.source, row.durationMs, tree);
-	writeCache(indexed);
+	const indexed = buildIndex(key, stored, tree);
+	writeMemoryCache(indexed);
 
 	return indexed;
 };
-
-export type { IndexedTree };

@@ -2,12 +2,12 @@ import crypto from "node:crypto";
 import { afterEach, beforeAll, beforeEach, describe, expect, test } from "vitest";
 import { createApp } from "~/server/app";
 import { db } from "~/server/db/db";
-import { repositoriesTable, snapshotUsageScansTable } from "~/server/db/schema";
+import { repositoriesTable } from "~/server/db/schema";
 import { generateShortId } from "~/server/utils/id";
 import { createTestSession } from "~/test/helpers/auth";
 import { createUsageFold } from "@zerobyte/core/usage";
 import type { UsageNode } from "@zerobyte/core/usage";
-import { clearSnapshotUsageCache, saveUsageTree } from "../helpers/snapshot-usage-store";
+import { clearSnapshotUsageCache, deleteUsageTrees, saveUsageTree } from "../helpers/snapshot-usage-store";
 
 const app = createApp();
 
@@ -21,8 +21,11 @@ beforeEach(() => {
 	clearSnapshotUsageCache();
 });
 
-afterEach(async () => {
-	await db.delete(snapshotUsageScansTable);
+const seeded: { repositoryId: string; snapshotId: string }[] = [];
+
+afterEach(() => {
+	for (const entry of seeded) deleteUsageTrees(entry.repositoryId, [entry.snapshotId]);
+	seeded.length = 0;
 	clearSnapshotUsageCache();
 });
 
@@ -48,7 +51,7 @@ const createRepository = async (organizationId: string) => {
  *     /media                  1000   (one big file)
  *     /docs                    300   (two files)
  */
-const seedTree = (repositoryId: string, organizationId: string, snapshotId: string) => {
+const seedTree = (repositoryId: string, _organizationId: string, snapshotId: string) => {
 	const nodes: UsageNode[] = [
 		{ path: "/data", type: "dir" },
 		{ path: "/data/media", type: "dir" },
@@ -61,14 +64,8 @@ const seedTree = (repositoryId: string, organizationId: string, snapshotId: stri
 	const fold = createUsageFold({ roots: ["/data"] });
 	for (const node of nodes) fold.push(node);
 
-	saveUsageTree({
-		repositoryId,
-		organizationId,
-		snapshotId,
-		source: "backup",
-		durationMs: 42,
-		tree: fold.finish(),
-	});
+	saveUsageTree({ repositoryId, snapshotId, durationMs: 42, tree: fold.finish() });
+	seeded.push({ repositoryId, snapshotId });
 };
 
 describe("GET /repositories/:shortId/snapshots/:snapshotId/usage", () => {
@@ -102,7 +99,6 @@ describe("GET /repositories/:shortId/snapshots/:snapshotId/usage", () => {
 		expect(res.status).toBe(200);
 		expect(body.status).toBe("ready");
 		expect(body.path).toBe("/data");
-		expect(body.meta.source).toBe("backup");
 		expect(body.meta.totalSize).toBe(1300);
 		expect(body.entries.map((entry: { name: string }) => entry.name)).toEqual(["media", "docs"]);
 		expect(body.entries[0].size).toBe(1000);
