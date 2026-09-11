@@ -10,6 +10,11 @@ import {
 	resticSnapshotSummarySchema,
 	resticStatsSchema,
 } from "@zerobyte/core/restic";
+import {
+	snapshotUsageDirectorySchema,
+	snapshotUsageEntrySchema,
+	snapshotUsageMetaSchema,
+} from "~/schemas/snapshot-usage";
 
 export const repositorySchema = z.object({
 	id: z.string(),
@@ -295,6 +300,84 @@ export const listSnapshotFilesDto = describeRoute({
 			content: {
 				"application/json": {
 					schema: resolver(listSnapshotFilesResponse),
+				},
+			},
+		},
+	},
+});
+
+const snapshotUsageReadyResponse = z.object({
+	status: z.literal("ready"),
+	meta: snapshotUsageMetaSchema,
+	/** The directory being listed. */
+	path: z.string(),
+	directory: snapshotUsageDirectorySchema.nullable(),
+	/** Children of `path`, largest first, capped by the query's limit. */
+	entries: snapshotUsageEntrySchema.array(),
+	/** Children before the limit was applied. */
+	totalEntries: z.number(),
+});
+
+/**
+ * Nothing cached for this snapshot yet. Deliberately a 200 with a status rather
+ * than a 404, so the UI can offer to read it instead of rendering an error.
+ */
+const snapshotUsageMissingResponse = z.object({
+	status: z.literal("missing"),
+});
+
+/** A read is already in flight; the UI can follow the task for progress. */
+const snapshotUsageScanningResponse = z.object({
+	status: z.literal("scanning"),
+	taskId: z.string(),
+});
+
+const getSnapshotUsageResponse = z.discriminatedUnion("status", [
+	snapshotUsageReadyResponse,
+	snapshotUsageScanningResponse,
+	snapshotUsageMissingResponse,
+]);
+
+export type GetSnapshotUsageDto = z.infer<typeof getSnapshotUsageResponse>;
+
+export const getSnapshotUsageQuery = z.object({
+	path: z.string().optional(),
+	limit: z.coerce.number().int().min(1).max(1000).optional(),
+});
+
+export const getSnapshotUsageDto = describeRoute({
+	description: "Directory sizes within a snapshot, largest first",
+	tags: ["Repositories"],
+	operationId: "getSnapshotUsage",
+	responses: {
+		200: {
+			description: "Disk usage for a directory in the snapshot",
+			content: {
+				"application/json": {
+					schema: resolver(getSnapshotUsageResponse),
+				},
+			},
+		},
+	},
+});
+
+const scanSnapshotUsageResponse = z.object({
+	taskId: z.string(),
+	status: z.enum(["started", "already-running"]),
+});
+
+export type ScanSnapshotUsageDto = z.infer<typeof scanSnapshotUsageResponse>;
+
+export const scanSnapshotUsageDto = describeRoute({
+	description: "Read a snapshot's directory sizes from the repository with restic",
+	tags: ["Repositories"],
+	operationId: "scanSnapshotUsage",
+	responses: {
+		200: {
+			description: "Usage scan started, or already running",
+			content: {
+				"application/json": {
+					schema: resolver(scanSnapshotUsageResponse),
 				},
 			},
 		},

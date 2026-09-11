@@ -9,6 +9,7 @@ import { forget } from "./commands/forget";
 import { init } from "./commands/init";
 import { keyAdd } from "./commands/key-add";
 import { ls } from "./commands/ls";
+import { lsNcdu } from "./commands/ls-ncdu";
 import { repairIndex } from "./commands/repair-index";
 import { restore } from "./commands/restore";
 import { snapshots } from "./commands/snapshots";
@@ -110,6 +111,7 @@ export const createRestic = (deps: ResticDeps) => ({
 	tagSnapshots: withDeps("restic.tagSnapshots", tagSnapshots, deps),
 	unlock: withDeps("restic.unlock", unlock, deps),
 	ls: withDeps("restic.ls", ls, deps),
+	lsNcdu: withDeps("restic.lsNcdu", lsNcdu, deps),
 	check: withDeps("restic.check", check, deps),
 	repairIndex: withDeps("restic.repairIndex", repairIndex, deps),
 	copy: withDeps("restic.copy", copy, deps),

@@ -16,6 +16,7 @@ export const taskLogKindLabels = {
 	doctor: "Repository doctor",
 	mirrorSync: "Mirror sync",
 	forget: "Apply retention policy",
+	snapshotUsage: "Snapshot storage usage",
 } satisfies Record<TaskLogKind, string>;
 
 export const taskLogOutcomeLabels = {

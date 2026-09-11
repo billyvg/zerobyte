@@ -2,10 +2,12 @@ import { createDeleteSnapshotsCommand } from "./delete-snapshots-command";
 import { createDoctorCommand } from "./doctor-command";
 import { createTagSnapshotsCommand } from "./tag-snapshots-command";
 import { createRestoreCommand } from "./restore-command";
+import { createScanUsageCommand } from "./scan-usage-command";
 
 export const commands = {
 	createDeleteSnapshots: createDeleteSnapshotsCommand,
 	createDoctor: createDoctorCommand,
 	createRestore: createRestoreCommand,
+	createScanUsage: createScanUsageCommand,
 	createTagSnapshots: createTagSnapshotsCommand,
 };

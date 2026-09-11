@@ -2392,6 +2392,93 @@ export type ListSnapshotFilesResponses = {
 
 export type ListSnapshotFilesResponse = ListSnapshotFilesResponses[keyof ListSnapshotFilesResponses];
 
+export type GetSnapshotUsageData = {
+    body?: never;
+    path: {
+        shortId: string;
+        snapshotId: string;
+    };
+    query?: {
+        path?: string;
+        limit?: number;
+    };
+    url: '/api/v1/repositories/{shortId}/snapshots/{snapshotId}/usage';
+};
+
+export type GetSnapshotUsageResponses = {
+    /**
+     * Disk usage for a directory in the snapshot
+     */
+    200: {
+        status: 'ready';
+        meta: {
+            scannedAt: number;
+            durationMs: number;
+            totalSize: number;
+            fileCount: number;
+            dirCount: number;
+            roots: Array<string>;
+            skipped: number;
+            appliedMinSize: number;
+        };
+        path: string;
+        directory: {
+            path: string;
+            name: string;
+            size: number;
+            ownSize: number;
+            fileCount: number;
+            dirCount: number;
+            maxMtime: number;
+            truncatedChildren?: {
+                count: number;
+                size: number;
+            };
+        } | null;
+        entries: Array<{
+            path: string;
+            name: string;
+            type: 'file' | 'dir';
+            size: number;
+            shareOfParent: number;
+            shareOfTotal: number;
+            fileCount?: number;
+            dirCount?: number;
+            maxMtime?: number;
+        }>;
+        totalEntries: number;
+    } | {
+        status: 'scanning';
+        taskId: string;
+    } | {
+        status: 'missing';
+    };
+};
+
+export type GetSnapshotUsageResponse = GetSnapshotUsageResponses[keyof GetSnapshotUsageResponses];
+
+export type ScanSnapshotUsageData = {
+    body?: never;
+    path: {
+        shortId: string;
+        snapshotId: string;
+    };
+    query?: never;
+    url: '/api/v1/repositories/{shortId}/snapshots/{snapshotId}/usage/scan';
+};
+
+export type ScanSnapshotUsageResponses = {
+    /**
+     * Usage scan started, or already running
+     */
+    200: {
+        taskId: string;
+        status: 'started' | 'already-running';
+    };
+};
+
+export type ScanSnapshotUsageResponse = ScanSnapshotUsageResponses[keyof ScanSnapshotUsageResponses];
+
 export type DumpSnapshotData = {
     body?: never;
     path: {
@@ -3698,6 +3785,29 @@ export type GetBackupScheduleForVolumeResponses = {
 };
 
 export type GetBackupScheduleForVolumeResponse = GetBackupScheduleForVolumeResponses[keyof GetBackupScheduleForVolumeResponses];
+
+export type AddExcludePatternsData = {
+    body: {
+        patterns: Array<string>;
+    };
+    path: {
+        shortId: string;
+    };
+    query?: never;
+    url: '/api/v1/backups/{shortId}/exclusions';
+};
+
+export type AddExcludePatternsResponses = {
+    /**
+     * Patterns appended
+     */
+    200: {
+        excludePatterns: Array<string>;
+        added: number;
+    };
+};
+
+export type AddExcludePatternsResponse = AddExcludePatternsResponses[keyof AddExcludePatternsResponses];
 
 export type RunBackupNowData = {
     body?: never;
@@ -5191,7 +5301,7 @@ export type ListTasksData = {
     body?: never;
     path?: never;
     query?: {
-        kind?: 'backup' | 'restore' | 'deleteSnapshots' | 'tagSnapshots' | 'doctor' | 'mirrorSync' | 'forget';
+        kind?: 'backup' | 'restore' | 'deleteSnapshots' | 'tagSnapshots' | 'doctor' | 'mirrorSync' | 'forget' | 'snapshotUsage';
         resourceType?: 'backup_schedule' | 'repository';
         resourceId?: string;
         operationKey?: string;
@@ -5205,7 +5315,7 @@ export type ListTasksResponses = {
      */
     200: Array<{
         id: string;
-        kind: 'backup' | 'restore' | 'deleteSnapshots' | 'tagSnapshots' | 'doctor' | 'mirrorSync' | 'forget';
+        kind: 'backup' | 'restore' | 'deleteSnapshots' | 'tagSnapshots' | 'doctor' | 'mirrorSync' | 'forget' | 'snapshotUsage';
         status: 'queued' | 'running' | 'cancelling' | 'cancelled' | 'succeeded' | 'failed' | 'stale';
         resourceType: 'backup_schedule' | 'repository';
         resourceId: string;
@@ -5235,6 +5345,10 @@ export type ListTasksResponses = {
         } | {
             kind: 'doctor';
             repositoryId: string;
+        } | {
+            kind: 'snapshotUsage';
+            repositoryId: string;
+            snapshotId: string;
         } | {
             kind: 'mirrorSync';
             scheduleId: number;
@@ -5286,6 +5400,9 @@ export type ListTasksResponses = {
             kind: 'mirrorSync';
             phase: 'preparing' | 'copying' | 'retention';
             message: string | null;
+        } | {
+            kind: 'snapshotUsage';
+            bytesRead: number;
         } | null;
         result: {
             kind: 'backup';
@@ -5344,6 +5461,11 @@ export type ListTasksResponses = {
             kind: 'mirrorSync';
         } | {
             kind: 'forget';
+        } | {
+            kind: 'snapshotUsage';
+            totalSize: number;
+            fileCount: number;
+            dirCount: number;
         } | null;
         error: string | null;
         cancellationRequested: boolean;
@@ -5360,7 +5482,7 @@ export type StreamTasksEventsData = {
     body?: never;
     path?: never;
     query?: {
-        kind?: 'backup' | 'restore' | 'deleteSnapshots' | 'tagSnapshots' | 'doctor' | 'mirrorSync' | 'forget';
+        kind?: 'backup' | 'restore' | 'deleteSnapshots' | 'tagSnapshots' | 'doctor' | 'mirrorSync' | 'forget' | 'snapshotUsage';
         resourceType?: 'backup_schedule' | 'repository';
         resourceId?: string;
         operationKey?: string;
@@ -5374,7 +5496,7 @@ export type StreamTasksEventsResponses = {
      */
     200: {
         id: string;
-        kind: 'backup' | 'restore' | 'deleteSnapshots' | 'tagSnapshots' | 'doctor' | 'mirrorSync' | 'forget';
+        kind: 'backup' | 'restore' | 'deleteSnapshots' | 'tagSnapshots' | 'doctor' | 'mirrorSync' | 'forget' | 'snapshotUsage';
         status: 'queued' | 'running' | 'cancelling' | 'cancelled' | 'succeeded' | 'failed' | 'stale';
         resourceType: 'backup_schedule' | 'repository';
         resourceId: string;
@@ -5404,6 +5526,10 @@ export type StreamTasksEventsResponses = {
         } | {
             kind: 'doctor';
             repositoryId: string;
+        } | {
+            kind: 'snapshotUsage';
+            repositoryId: string;
+            snapshotId: string;
         } | {
             kind: 'mirrorSync';
             scheduleId: number;
@@ -5455,6 +5581,9 @@ export type StreamTasksEventsResponses = {
             kind: 'mirrorSync';
             phase: 'preparing' | 'copying' | 'retention';
             message: string | null;
+        } | {
+            kind: 'snapshotUsage';
+            bytesRead: number;
         } | null;
         result: {
             kind: 'backup';
@@ -5513,6 +5642,11 @@ export type StreamTasksEventsResponses = {
             kind: 'mirrorSync';
         } | {
             kind: 'forget';
+        } | {
+            kind: 'snapshotUsage';
+            totalSize: number;
+            fileCount: number;
+            dirCount: number;
         } | null;
         error: string | null;
         cancellationRequested: boolean;
@@ -5522,7 +5656,7 @@ export type StreamTasksEventsResponses = {
         finishedAt: number | null;
     } | Array<{
         id: string;
-        kind: 'backup' | 'restore' | 'deleteSnapshots' | 'tagSnapshots' | 'doctor' | 'mirrorSync' | 'forget';
+        kind: 'backup' | 'restore' | 'deleteSnapshots' | 'tagSnapshots' | 'doctor' | 'mirrorSync' | 'forget' | 'snapshotUsage';
         status: 'queued' | 'running' | 'cancelling' | 'cancelled' | 'succeeded' | 'failed' | 'stale';
         resourceType: 'backup_schedule' | 'repository';
         resourceId: string;
@@ -5552,6 +5686,10 @@ export type StreamTasksEventsResponses = {
         } | {
             kind: 'doctor';
             repositoryId: string;
+        } | {
+            kind: 'snapshotUsage';
+            repositoryId: string;
+            snapshotId: string;
         } | {
             kind: 'mirrorSync';
             scheduleId: number;
@@ -5603,6 +5741,9 @@ export type StreamTasksEventsResponses = {
             kind: 'mirrorSync';
             phase: 'preparing' | 'copying' | 'retention';
             message: string | null;
+        } | {
+            kind: 'snapshotUsage';
+            bytesRead: number;
         } | null;
         result: {
             kind: 'backup';
@@ -5661,6 +5802,11 @@ export type StreamTasksEventsResponses = {
             kind: 'mirrorSync';
         } | {
             kind: 'forget';
+        } | {
+            kind: 'snapshotUsage';
+            totalSize: number;
+            fileCount: number;
+            dirCount: number;
         } | null;
         error: string | null;
         cancellationRequested: boolean;
@@ -5677,7 +5823,7 @@ export type ListTaskHistoryData = {
     body?: never;
     path?: never;
     query?: {
-        kind?: 'backup' | 'restore' | 'deleteSnapshots' | 'tagSnapshots' | 'doctor' | 'mirrorSync' | 'forget';
+        kind?: 'backup' | 'restore' | 'deleteSnapshots' | 'tagSnapshots' | 'doctor' | 'mirrorSync' | 'forget' | 'snapshotUsage';
         outcome?: 'running' | 'success' | 'warning' | 'error' | 'cancelled' | 'stale';
         page?: number;
     };
@@ -5692,7 +5838,7 @@ export type ListTaskHistoryResponses = {
         organizationId: string;
         items: Array<{
             id: string;
-            kind: 'backup' | 'restore' | 'deleteSnapshots' | 'tagSnapshots' | 'doctor' | 'mirrorSync' | 'forget';
+            kind: 'backup' | 'restore' | 'deleteSnapshots' | 'tagSnapshots' | 'doctor' | 'mirrorSync' | 'forget' | 'snapshotUsage';
             outcome: 'running' | 'success' | 'warning' | 'error' | 'cancelled' | 'stale' | null;
             target: {
                 kind: 'backupSchedule';
@@ -5740,7 +5886,7 @@ export type StreamTaskEventsResponses = {
      */
     200: {
         id: string;
-        kind: 'backup' | 'restore' | 'deleteSnapshots' | 'tagSnapshots' | 'doctor' | 'mirrorSync' | 'forget';
+        kind: 'backup' | 'restore' | 'deleteSnapshots' | 'tagSnapshots' | 'doctor' | 'mirrorSync' | 'forget' | 'snapshotUsage';
         status: 'queued' | 'running' | 'cancelling' | 'cancelled' | 'succeeded' | 'failed' | 'stale';
         resourceType: 'backup_schedule' | 'repository';
         resourceId: string;
@@ -5770,6 +5916,10 @@ export type StreamTaskEventsResponses = {
         } | {
             kind: 'doctor';
             repositoryId: string;
+        } | {
+            kind: 'snapshotUsage';
+            repositoryId: string;
+            snapshotId: string;
         } | {
             kind: 'mirrorSync';
             scheduleId: number;
@@ -5821,6 +5971,9 @@ export type StreamTaskEventsResponses = {
             kind: 'mirrorSync';
             phase: 'preparing' | 'copying' | 'retention';
             message: string | null;
+        } | {
+            kind: 'snapshotUsage';
+            bytesRead: number;
         } | null;
         result: {
             kind: 'backup';
@@ -5879,6 +6032,11 @@ export type StreamTaskEventsResponses = {
             kind: 'mirrorSync';
         } | {
             kind: 'forget';
+        } | {
+            kind: 'snapshotUsage';
+            totalSize: number;
+            fileCount: number;
+            dirCount: number;
         } | null;
         error: string | null;
         cancellationRequested: boolean;
@@ -5906,7 +6064,7 @@ export type GetTaskResponses = {
      */
     200: {
         id: string;
-        kind: 'backup' | 'restore' | 'deleteSnapshots' | 'tagSnapshots' | 'doctor' | 'mirrorSync' | 'forget';
+        kind: 'backup' | 'restore' | 'deleteSnapshots' | 'tagSnapshots' | 'doctor' | 'mirrorSync' | 'forget' | 'snapshotUsage';
         status: 'queued' | 'running' | 'cancelling' | 'cancelled' | 'succeeded' | 'failed' | 'stale';
         resourceType: 'backup_schedule' | 'repository';
         resourceId: string;
@@ -5936,6 +6094,10 @@ export type GetTaskResponses = {
         } | {
             kind: 'doctor';
             repositoryId: string;
+        } | {
+            kind: 'snapshotUsage';
+            repositoryId: string;
+            snapshotId: string;
         } | {
             kind: 'mirrorSync';
             scheduleId: number;
@@ -5987,6 +6149,9 @@ export type GetTaskResponses = {
             kind: 'mirrorSync';
             phase: 'preparing' | 'copying' | 'retention';
             message: string | null;
+        } | {
+            kind: 'snapshotUsage';
+            bytesRead: number;
         } | null;
         result: {
             kind: 'backup';
@@ -6045,6 +6210,11 @@ export type GetTaskResponses = {
             kind: 'mirrorSync';
         } | {
             kind: 'forget';
+        } | {
+            kind: 'snapshotUsage';
+            totalSize: number;
+            fileCount: number;
+            dirCount: number;
         } | null;
         error: string | null;
         cancellationRequested: boolean;
