@@ -129,6 +129,60 @@ jobs:
           draft: false
           prerelease: true
 
+  build-desktop:
+    needs: publish-release
+    if: false
+    uses: ./.github/workflows/desktop-build.yml
+    with:
+      version: ${{ github.ref_name }}
+    secrets: inherit
+
+  publish-desktop-assets:
+    needs: build-desktop
+    runs-on: ubuntu-latest
+    permissions:
+      attestations: write
+      contents: write
+      id-token: write
+    steps:
+      - name: Download DMG
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
+        with:
+          name: desktop-macos-release
+          path: release-assets
+
+      - name: Download Windows installer
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
+        with:
+          name: desktop-windows-release
+          path: release-assets
+
+      - name: Download Linux AppImage
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
+        with:
+          name: desktop-linux-release
+          path: release-assets
+
+      - name: Attest desktop release artifacts
+        uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4
+        with:
+          subject-path: |
+            release-assets/*.dmg
+            release-assets/*.exe
+            release-assets/*.AppImage
+
+      - name: Upload desktop release assets
+        uses: softprops/action-gh-release@3d0d9888cb7fd7b750713d6e236d1fcb99157228 # v3
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tag_name: ${{ github.ref_name }}
+          files: |
+            release-assets/*.dmg
+            release-assets/*.exe
+            release-assets/*.AppImage
+          fail_on_unmatched_files: true
+
   request-docs-version-update:
     uses: ./.github/workflows/request-docs-version-update.yml
     needs: [publish-release, determine-release-type]
