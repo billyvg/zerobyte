@@ -199,7 +199,7 @@ test("can sync missing snapshots to a mirror repository", async ({ page }, testI
 		await expect(syncDialog.getByRole("heading", { name: "Sync snapshots" })).toBeVisible();
 	}).toPass({ timeout: 15000 });
 	await expect(syncDialog.getByText(/All 1 snapshots are already synced/)).toBeVisible({ timeout: 15000 });
-	await syncDialog.getByRole("button", { name: "Cancel" }).click();
+	await syncDialog.getByRole("button", { name: "Close", exact: true }).first().click();
 
 	// Verify the synced snapshot remains visible in the mirror repository UI.
 	await gotoAndWaitForAppReady(page, `/repositories/${mirrorRepoShortId}`);
