@@ -132,6 +132,9 @@ jobs:
   build-desktop:
     needs: publish-release
     if: false
+    permissions:
+      actions: read
+      contents: read
     uses: ./.github/workflows/desktop-build.yml
     with:
       version: ${{ github.ref_name }}
