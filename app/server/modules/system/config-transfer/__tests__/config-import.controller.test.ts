@@ -426,9 +426,7 @@ describe("configuration import", () => {
 			await encryptPayload({ version: 99 }),
 		);
 		expect(unsupportedResponse.status).toBe(400);
-		expect((await unsupportedResponse.json()).message).toContain(
-			"Use a Zerobyte release that supports this export",
-		);
+		expect((await unsupportedResponse.json()).message).toContain("Update Zerobyte to the latest release");
 
 		const sourceSession = await createTestSession();
 		allowConfigExportPassword();
@@ -445,12 +443,12 @@ describe("configuration import", () => {
 		});
 	});
 
-	test("rejects unsupported encryption envelopes with conversion guidance", async () => {
+	test("rejects unsupported encryption envelopes with update guidance", async () => {
 		const targetSession = await createTestSession();
 		const response = await requestConfigImport(targetSession.headers, "zbcfg:v99:{}");
 
 		expect(response.status).toBe(400);
-		expect((await response.json()).message).toContain("Use a Zerobyte release that supports this export");
+		expect((await response.json()).message).toContain("Update Zerobyte to the latest release");
 	});
 
 	test("rejects tampered exports before writing configuration", async () => {

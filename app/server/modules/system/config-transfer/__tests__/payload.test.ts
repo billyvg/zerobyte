@@ -2,12 +2,18 @@ import type { RepositoryBackend, RepositoryConfig } from "@zerobyte/core/restic"
 import type { BackendConfig, BackendType } from "@zerobyte/contracts/volumes";
 import { describe, expect, expectTypeOf, test } from "vitest";
 import type { NotificationConfig, NotificationType } from "~/schemas/notifications";
+import { decodeConfigTransferPayloadV1, encodeConfigTransferPayloadV1 } from "../v1/codec";
+import { UnsupportedConfigTransferVersionError } from "../errors";
 import type { ConfigTransferModel } from "../model";
-import { encodeCurrentConfigTransferPayload, parseConfigTransferPayload } from "../payload";
+import {
+	CURRENT_CONFIG_TRANSFER_PAYLOAD_VERSION,
+	encodeCurrentConfigTransferPayload,
+	parseConfigTransferPayload,
+} from "../payload";
+import { configTransferPayloadV1Schema } from "../v1/payload";
 import { loadPayload } from "./config-transfer-test-helpers";
 
-type CurrentEncodedPayload = ReturnType<typeof encodeCurrentConfigTransferPayload>;
-type CurrentEncodedModel = Omit<CurrentEncodedPayload, "version">;
+type CurrentEncodedModel = Omit<ReturnType<typeof encodeCurrentConfigTransferPayload>, "version">;
 
 const repositoryConfigs = {
 	s3: {
@@ -140,12 +146,32 @@ const createVariantCoveragePayload = (): ConfigTransferModel => ({
 });
 
 describe("config transfer payload graph", () => {
-	test("requires an explicit codec change when the current transfer model changes", () => {
+	test("requires a wire contract update when the current transfer model changes", () => {
 		expectTypeOf<CurrentEncodedModel>().toEqualTypeOf<ConfigTransferModel>();
 	});
 
-	test("encodes every current backend and notification variant in v1", () => {
+	test("decodes the historical v1 fixture into the current import model", async () => {
+		const fixture = await loadPayload();
+
+		expect(parseConfigTransferPayload(fixture)).toMatchSnapshot();
+	});
+
+	test("directs newer-format imports to update before validating their unknown shape", () => {
+		const futurePayload = { version: CURRENT_CONFIG_TRANSFER_PAYLOAD_VERSION + 1, futureConfiguration: {} };
+
+		expect(() => parseConfigTransferPayload(futurePayload)).toThrow(UnsupportedConfigTransferVersionError);
+		expect(() => parseConfigTransferPayload(futurePayload)).toThrow("Update Zerobyte to the latest release");
+	});
+
+	test.each([0, -1, 1.5, Number.MAX_SAFE_INTEGER + 1])("rejects invalid version %s as malformed", (version) => {
+		expect(() => parseConfigTransferPayload({ version })).toThrow();
+		expect(() => parseConfigTransferPayload({ version })).not.toThrow(UnsupportedConfigTransferVersionError);
+	});
+
+	test("encodes every current backend and notification variant in the current format", () => {
 		const encoded = encodeCurrentConfigTransferPayload(createVariantCoveragePayload());
+
+		expect(encoded.version).toBe(CURRENT_CONFIG_TRANSFER_PAYLOAD_VERSION);
 
 		expect(encoded.repositories.map(({ config }) => config.backend).sort()).toEqual(
 			Object.keys(repositoryConfigs).sort(),
@@ -159,10 +185,25 @@ describe("config transfer payload graph", () => {
 		});
 	});
 
+	test("rejects unversioned fields instead of silently dropping them during export", async () => {
+		const payload = parseConfigTransferPayload(await loadPayload());
+		const extendedPayload = {
+			...payload,
+			repositories: payload.repositories.map((repository) => ({
+				...repository,
+				unreleasedFutureField: true,
+			})),
+		};
+
+		expect(() => encodeCurrentConfigTransferPayload(extendedPayload)).toThrow("unreleasedFutureField");
+	});
+
 	test("keeps the canonical v1 fixture identical across decode and encode", async () => {
 		const fixture = await loadPayload();
 
-		const encoded = encodeCurrentConfigTransferPayload(parseConfigTransferPayload(fixture));
+		const encoded = encodeConfigTransferPayloadV1(
+			decodeConfigTransferPayloadV1(configTransferPayloadV1Schema.parse(fixture)),
+		);
 
 		expect(encoded).toEqual(fixture);
 	});

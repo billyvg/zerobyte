@@ -148,6 +148,12 @@ describe("configuration transfer encryption envelope", () => {
 		await expect(decryptConfigTransferPayload("zbcfg:v99:{}", passphrase)).rejects.toBeInstanceOf(
 			UnsupportedConfigTransferEnvelopeVersionError,
 		);
+		await expect(decryptConfigTransferPayload("zbcfg:v99:{}", passphrase)).rejects.toThrow(
+			"Update Zerobyte to the latest release",
+		);
+		await expect(decryptConfigTransferPayload("zbcfg:v0:{}", passphrase)).rejects.toBeInstanceOf(
+			InvalidConfigTransferEnvelopeError,
+		);
 		await expect(decryptConfigTransferPayload("zbcfg:v1:{", passphrase)).rejects.toBeInstanceOf(
 			InvalidConfigTransferEnvelopeError,
 		);

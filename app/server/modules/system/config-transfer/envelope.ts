@@ -7,6 +7,8 @@ import {
 	encryptConfigTransferPayloadV1,
 } from "./v1/envelope";
 
+export const CURRENT_CONFIG_TRANSFER_ENVELOPE_VERSION = CONFIG_TRANSFER_ENVELOPE_VERSION_V1;
+
 const CONFIG_TRANSFER_ENVELOPE_PREFIX = "zbcfg:";
 const CONFIG_TRANSFER_ENVELOPE_VERSION_PATTERN = new RegExp(`^${CONFIG_TRANSFER_ENVELOPE_PREFIX}v(\\d+):`);
 
@@ -23,7 +25,7 @@ const parseEnvelopeHeader = (encryptedConfig: string) => {
 	}
 
 	const version = Number(versionMatch[1]);
-	if (!Number.isSafeInteger(version) || versionMatch[0] !== createEnvelopePrefix(version)) {
+	if (!Number.isSafeInteger(version) || version < 1 || versionMatch[0] !== createEnvelopePrefix(version)) {
 		throw new InvalidConfigTransferEnvelopeError();
 	}
 
@@ -54,6 +56,6 @@ export const decryptConfigTransferPayload = async (encryptedConfig: string, pass
 		case CONFIG_TRANSFER_ENVELOPE_VERSION_V1:
 			return await decryptConfigTransferPayloadV1(serializedEnvelope, passphrase);
 		default:
-			throw new UnsupportedConfigTransferEnvelopeVersionError(version);
+			throw new UnsupportedConfigTransferEnvelopeVersionError(version, CURRENT_CONFIG_TRANSFER_ENVELOPE_VERSION);
 	}
 };

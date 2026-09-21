@@ -21,9 +21,9 @@ export class InvalidConfigTransferEnvelopeError extends Error {
 export class UnsupportedConfigTransferEnvelopeVersionError extends Error {
 	readonly name = "UnsupportedConfigTransferEnvelopeVersionError";
 
-	constructor(version: number) {
+	constructor(version: number, currentVersion: number) {
 		super(
-			`Unsupported config export encryption version: ${version}. Use a Zerobyte release that supports this export to convert it to a newer format.`,
+			`Unsupported config export encryption version: ${version}. This Zerobyte release supports up to v${currentVersion}. Update Zerobyte to the latest release to import this export.`,
 		);
 	}
 }
@@ -31,9 +31,9 @@ export class UnsupportedConfigTransferEnvelopeVersionError extends Error {
 export class UnsupportedConfigTransferVersionError extends Error {
 	readonly name = "UnsupportedConfigTransferVersionError";
 
-	constructor(version: number) {
+	constructor(version: number, currentVersion: number) {
 		super(
-			`Unsupported config transfer version: ${version}. Use a Zerobyte release that supports this export to convert it to a newer format.`,
+			`Unsupported config transfer version: ${version}. This Zerobyte release supports up to v${currentVersion}. Update Zerobyte to the latest release to import this export.`,
 		);
 	}
 }
