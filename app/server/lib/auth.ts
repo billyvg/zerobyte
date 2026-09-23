@@ -13,6 +13,7 @@ import { passkey } from "@better-auth/passkey";
 import { createAuthMiddleware } from "better-auth/api";
 import { config } from "../core/config";
 import { db } from "../db/db";
+import * as schema from "../db/schema";
 import { cryptoUtils } from "../utils/crypto";
 import { authService } from "../modules/auth/auth.service";
 import { tanstackStartCookies } from "better-auth/tanstack-start";
@@ -46,6 +47,7 @@ export const auth = betterAuth({
 	},
 	onAPIError: {
 		throw: true,
+		errorURL: `${config.baseUrl}/api/v1/auth/login-error`,
 	},
 	hooks: {
 		before: createAuthMiddleware(async (ctx) => {
@@ -60,6 +62,7 @@ export const auth = betterAuth({
 	},
 	database: drizzleAdapter(db, {
 		provider: "sqlite",
+		schema,
 	}),
 	databaseHooks: {
 		account: {
@@ -69,6 +72,7 @@ export const auth = betterAuth({
 						const allowed = await ssoIntegration.canLinkSsoAccount(account.userId, account.providerId, ctx);
 						if (!allowed) {
 							throw new APIError("FORBIDDEN", {
+								code: "ACCOUNT_LINK_REQUIRED",
 								message: ACCOUNT_LINK_REQUIRED_DESCRIPTION,
 							});
 						}

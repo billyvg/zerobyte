@@ -17,6 +17,8 @@ import {
 	getSnapshotUsageOptions,
 	runBackupNowMutation,
 	deleteBackupScheduleMutation,
+	listNotificationDestinationsOptions,
+	listRepositoriesOptions,
 	listSnapshotsOptions,
 	updateBackupScheduleMutation,
 	deleteSnapshotMutation,
@@ -34,21 +36,12 @@ import { ScheduleMirrorsConfig } from "../components/schedule-mirrors-config";
 import { BackupSummaryCard } from "~/client/components/backup-summary-card";
 import { cn } from "~/client/lib/utils";
 import { getVolumeMountPath } from "~/client/lib/volume-path";
-import type {
-	BackupSchedule,
-	NotificationDestination,
-	Repository,
-	ScheduleMirror,
-	ScheduleNotification,
-	Snapshot,
-} from "~/client/lib/types";
+import type { BackupSchedule, ScheduleMirror, ScheduleNotification, Snapshot } from "~/client/lib/types";
 import { useNavigate } from "@tanstack/react-router";
 
 type Props = {
 	loaderData: {
 		schedule: BackupSchedule;
-		notifs: NotificationDestination[];
-		repos: Repository[];
 		scheduleNotifs: ScheduleNotification[];
 		mirrors: ScheduleMirror[];
 		snapshots?: Snapshot[];
@@ -70,6 +63,14 @@ export function ScheduleDetailsPage(props: Props) {
 		...getBackupScheduleOptions({ path: { shortId: scheduleId } }),
 	});
 	const { deletingSnapshotIds } = useDeletingSnapshots(schedule.repository.shortId);
+
+	const { data: repositories } = useSuspenseQuery({
+		...listRepositoriesOptions(),
+	});
+
+	const { data: notificationDestinations } = useSuspenseQuery({
+		...listNotificationDestinationsOptions(),
+	});
 
 	const {
 		data: snapshots,
@@ -203,18 +204,18 @@ export function ScheduleDetailsPage(props: Props) {
 				handleDeleteSchedule={() => deleteSchedule.mutate({ path: { shortId: schedule.shortId } })}
 				schedule={schedule}
 			/>
-			<div className={cn({ hidden: !loaderData.notifs?.length })}>
+			<div className={cn({ hidden: notificationDestinations.length === 0 })}>
 				<ScheduleNotificationsConfig
 					scheduleShortId={schedule.shortId}
-					destinations={loaderData.notifs ?? []}
+					destinations={notificationDestinations}
 					initialData={loaderData.scheduleNotifs ?? []}
 				/>
 			</div>
-			<div className={cn({ hidden: !loaderData.repos?.length || loaderData.repos.length < 2 })}>
+			<div className={cn({ hidden: repositories.length < 2 })}>
 				<ScheduleMirrorsConfig
 					scheduleShortId={schedule.shortId}
 					primaryRepositoryId={schedule.repository.shortId}
-					repositories={loaderData.repos ?? []}
+					repositories={repositories}
 					initialData={loaderData.mirrors ?? []}
 				/>
 			</div>

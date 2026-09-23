@@ -113,7 +113,6 @@ Zerobyte can be customized using environment variables. Below are the available 
 | `WEBHOOK_ALLOWED_ORIGINS` | Comma-separated list of HTTP origins allowed for backup webhooks and outbound HTTP notification destinations.                             | (none)                 |
 | `WEBHOOK_TIMEOUT`         | Timeout for backup webhook requests in seconds.                                                                                           | `60`                   |
 | `LOG_LEVEL`               | Logging verbosity. Options: `debug`, `info`, `warn`, `error`.                                                                             | `info`                 |
-| `SERVER_IDLE_TIMEOUT`     | Idle timeout for the server in seconds.                                                                                                   | `60`                   |
 | `RCLONE_CONFIG_DIR`       | Path to the directory containing `rclone.conf` inside the container. Change this if running as a non-root user.                           | `/root/.config/rclone` |
 | `PROVISIONING_PATH`       | Path to a JSON file with operator-managed repositories and volumes to sync at startup.                                                    | (none)                 |
 
@@ -400,6 +399,13 @@ Zerobyte includes [Restic](https://github.com/restic/restic) for backup function
 - **License Text**: See [LICENSES/BSD-2-Clause-Restic.txt](LICENSES/BSD-2-Clause-Restic.txt)
 
 For a complete list of third-party software licenses and attributions, please refer to the [NOTICES.md](NOTICES.md) file.
+
+## Code signing policy
+
+Free code signing provided by [SignPath.io](https://signpath.io), certificate by [SignPath Foundation](https://signpath.org).
+
+- Committer, reviewer, and approver: [Nicolas Meienberger (@nicotsx)](https://github.com/nicotsx)
+- Privacy policy: [zerobyte.app/privacy](https://zerobyte.app/privacy)
 
 ## Contributing
 

@@ -9,7 +9,6 @@ import {
 } from "@zerobyte/core/restic";
 import { logger } from "@zerobyte/core/node";
 import { z } from "zod";
-import { config as appConfig } from "~/server/core/config";
 import { restic } from "~/server/core/restic";
 import { db } from "~/server/db/db";
 import { repositoriesTable, volumesTable } from "~/server/db/schema";
@@ -29,6 +28,7 @@ const provisionedRepositorySchema = z.object({
 	organizationId: z.string().min(1),
 	name: z.string().min(1),
 	compressionMode: z.enum(COMPRESSION_MODES).optional(),
+	autoCheckEnabled: z.boolean().default(true),
 	config: repositoryConfigSchema,
 	backend: z.enum(REPOSITORY_BACKENDS),
 	delete: z.boolean().default(false),
@@ -166,6 +166,7 @@ const syncProvisionedRepositories = async (repositories: ProvisionedRepository[]
 				type: repository.backend,
 				config: encryptedConfig,
 				compressionMode: repository.compressionMode,
+				autoCheckEnabled: repository.autoCheckEnabled,
 				status: "unknown",
 				organizationId: repository.organizationId,
 			});
@@ -174,7 +175,6 @@ const syncProvisionedRepositories = async (repositories: ProvisionedRepository[]
 				const result = await runEffectPromise(
 					restic.init(encryptedConfig, {
 						organizationId: repository.organizationId,
-						timeoutMs: appConfig.serverIdleTimeout * 1000,
 					}),
 				).catch((error) => ({ success: false, error }));
 
@@ -202,6 +202,7 @@ const syncProvisionedRepositories = async (repositories: ProvisionedRepository[]
 			type: repository.backend,
 			config: encryptedConfig,
 			compressionMode: repository.compressionMode,
+			autoCheckEnabled: repository.autoCheckEnabled,
 			organizationId: repository.organizationId,
 			updatedAt: Date.now(),
 		};

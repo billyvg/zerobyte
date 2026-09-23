@@ -11,7 +11,10 @@ import { Outlet, useNavigate } from "@tanstack/react-router";
 import { AppBreadcrumb } from "./app-breadcrumb";
 import { Tooltip, TooltipContent, TooltipTrigger } from "./ui/tooltip";
 import { ThemeToggle } from "./theme-toggle";
-import { PermissionsProvider } from "../hooks/use-permissions";
+import { PermissionsProvider, usePermissions } from "../hooks/use-permissions";
+import { useOrganizationContext } from "../hooks/use-org-context";
+import { RecoveryKeyReminder } from "./recovery-key-reminder";
+import { useSystemInfo } from "../hooks/use-system-info";
 
 type Props = {
 	loaderData: AppContext;
@@ -19,6 +22,8 @@ type Props = {
 
 export function Layout({ loaderData }: Props) {
 	const navigate = useNavigate();
+	const { runtime } = useSystemInfo();
+	const isDesktop = runtime === "desktop";
 
 	const handleLogout = async () => {
 		await authClient.signOut({
@@ -34,9 +39,10 @@ export function Layout({ loaderData }: Props) {
 	};
 
 	return (
-		<SidebarProvider>
+		<SidebarProvider className="relative">
 			<PermissionsProvider>
 				<AppSidebar />
+				<DashboardRecoveryKeyReminder />
 				<div className="w-full relative flex flex-col min-h-screen md:h-screen md:overflow-hidden">
 					<header className="z-50 bg-card-header border-b border-border/80 dark:border-border/50 shrink-0 h-16.25">
 						<div className="flex items-center h-full justify-between px-2 sm:px-8 mx-auto container gap-4">
@@ -46,23 +52,28 @@ export function Layout({ loaderData }: Props) {
 							</div>
 							{loaderData.user && (
 								<div className="flex items-center bg-card dark:bg-muted/30 border border-border/80 dark:border-border/50 px-2 py-1 rounded-full shadow-[0_2px_10px_-4px_rgba(0,0,0,0.05)] dark:shadow-sm">
-									<span className="text-sm text-muted-foreground hidden md:inline-flex pl-2 mr-5">
-										<span className="text-foreground">{loaderData.user.name}</span>
-									</span>
+									{!isDesktop && (
+										<span className="text-sm text-muted-foreground hidden md:inline-flex pl-2 mr-5">
+											<span className="text-foreground">{loaderData.user.name}</span>
+										</span>
+									)}
 									<ThemeToggle />
-									<Tooltip>
-										<TooltipTrigger asChild>
-											<Button
-												variant="ghost"
-												size="icon"
-												className="rounded-full h-7 text-xs text-muted-foreground hover:text-foreground"
-												onClick={handleLogout}
-											>
-												<LogOut className="w-4 h-4" />
-											</Button>
-										</TooltipTrigger>
-										<TooltipContent>Logout</TooltipContent>
-									</Tooltip>
+									{!isDesktop && (
+										<Tooltip>
+											<TooltipTrigger asChild>
+												<Button
+													variant="ghost"
+													size="icon"
+													className="rounded-full h-7 text-xs text-muted-foreground hover:text-foreground"
+													onClick={handleLogout}
+													aria-label="Logout"
+												>
+													<LogOut className="w-4 h-4" />
+												</Button>
+											</TooltipTrigger>
+											<TooltipContent>Logout</TooltipContent>
+										</Tooltip>
+									)}
 									<Tooltip>
 										<TooltipTrigger asChild>
 											<a
@@ -96,5 +107,20 @@ export function Layout({ loaderData }: Props) {
 				<DevPanelListener />
 			</PermissionsProvider>
 		</SidebarProvider>
+	);
+}
+
+export function DashboardRecoveryKeyReminder() {
+	const { activeOrganization } = useOrganizationContext();
+	const permissions = usePermissions();
+	const permissionsMatchActiveOrganization = permissions.activeOrganizationId === activeOrganization.id;
+	const canDownloadRecoveryKey = permissionsMatchActiveOrganization && permissions.can("recoveryKey.download");
+
+	return (
+		<RecoveryKeyReminder
+			key={activeOrganization.id}
+			organization={activeOrganization}
+			canDownloadRecoveryKey={canDownloadRecoveryKey}
+		/>
 	);
 }

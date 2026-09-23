@@ -17,20 +17,14 @@ import {
 	Loader2,
 	MoreHorizontal,
 } from "lucide-react";
-import { memo, type ReactNode, useCallback, useEffect, useMemo, useState } from "react";
+import { memo, type ReactNode, useCallback, useMemo } from "react";
 import { cn } from "~/client/lib/utils";
 import { Checkbox } from "~/client/components/ui/checkbox";
 import { ByteSize } from "~/client/components/bytes-size";
+import { buildFileEntryMap, type FileEntry } from "./file-tree-model";
+export type { FileEntry } from "./file-tree-model";
 
 const NODE_PADDING_LEFT = 12;
-
-export interface FileEntry {
-	name: string;
-	path: string;
-	type: string;
-	size?: number;
-	modifiedAt?: number;
-}
 
 interface PaginationState {
 	hasMore: boolean;
@@ -39,13 +33,14 @@ interface PaginationState {
 
 interface Props {
 	files?: FileEntry[];
+	renderFolderError?: (folderPath: string) => ReactNode;
 	selectedFile?: string;
 	onFileSelect?: (filePath: string) => void;
-	onFolderExpand?: (folderPath: string) => void;
+	onFolderToggle?: (folderPath: string, expanded: boolean) => void;
 	onFolderHover?: (folderPath: string) => void;
 	onLoadMore?: (folderPath: string) => void;
 	getFolderPagination?: (folderPath: string) => PaginationState;
-	expandedFolders?: Set<string>;
+	expandedFolders: Set<string>;
 	loadingFolders?: Set<string>;
 	className?: string;
 	withCheckboxes?: boolean;
@@ -60,13 +55,14 @@ interface Props {
 export const FileTree = memo((props: Props) => {
 	const {
 		files = [],
+		renderFolderError,
 		onFileSelect,
 		selectedFile,
-		onFolderExpand,
+		onFolderToggle,
 		onFolderHover,
 		onLoadMore,
 		getFolderPagination,
-		expandedFolders = new Set(),
+		expandedFolders,
 		loadingFolders = new Set(),
 		className,
 		withCheckboxes = false,
@@ -82,8 +78,6 @@ export const FileTree = memo((props: Props) => {
 		return buildFileList(files, foldersOnly);
 	}, [files, foldersOnly]);
 
-	const [collapsedFolders, setCollapsedFolders] = useState<Set<string>>(new Set());
-
 	const filteredFileList = useMemo(() => {
 		const list = [];
 		let lastDepth = Number.MAX_SAFE_INTEGER;
@@ -97,7 +91,7 @@ export const FileTree = memo((props: Props) => {
 			}
 
 			// ignore collapsed folders
-			if (collapsedFolders.has(fileOrFolder.fullPath)) {
+			if (fileOrFolder.kind === "folder" && !expandedFolders.has(fileOrFolder.fullPath)) {
 				lastDepth = Math.min(lastDepth, depth);
 			}
 
@@ -110,44 +104,6 @@ export const FileTree = memo((props: Props) => {
 		}
 
 		return list;
-	}, [fileList, collapsedFolders]);
-
-	const toggleCollapseState = useCallback(
-		(fullPath: string) => {
-			const shouldExpand = collapsedFolders.has(fullPath);
-
-			setCollapsedFolders((prevSet) => {
-				const newSet = new Set(prevSet);
-
-				if (newSet.has(fullPath)) {
-					newSet.delete(fullPath);
-				} else {
-					newSet.add(fullPath);
-				}
-
-				return newSet;
-			});
-
-			if (shouldExpand) {
-				onFolderExpand?.(fullPath);
-			}
-		},
-		[collapsedFolders, onFolderExpand],
-	);
-
-	// Add new folders to collapsed set when file list changes
-	useEffect(() => {
-		setCollapsedFolders((prevSet) => {
-			let hasChanges = false;
-			const newSet = new Set(prevSet);
-			for (const item of fileList) {
-				if (item.kind === "folder" && !newSet.has(item.fullPath) && !expandedFolders.has(item.fullPath)) {
-					newSet.add(item.fullPath);
-					hasChanges = true;
-				}
-			}
-			return hasChanges ? newSet : prevSet;
-		});
 	}, [fileList, expandedFolders]);
 
 	const handleFileSelect = useCallback(
@@ -322,14 +278,16 @@ export const FileTree = memo((props: Props) => {
 			const item = filteredFileList[i];
 			const parentPath = item.fullPath.slice(0, item.fullPath.lastIndexOf("/")) || "/";
 			const pagination = getFolderPagination?.(parentPath);
-			if (pagination?.hasMore && !collapsedFolders.has(parentPath)) {
+			if (pagination?.hasMore) {
 				// Update the last index for this parent
 				map.set(parentPath, i);
 			}
 		}
 
 		return map;
-	}, [filteredFileList, getFolderPagination, collapsedFolders]);
+	}, [filteredFileList, getFolderPagination]);
+
+	const rootError = renderFolderError?.("/");
 
 	return (
 		<div className={cn("text-sm", className)}>
@@ -357,12 +315,14 @@ export const FileTree = memo((props: Props) => {
 							<Folder
 								key={fileOrFolder.id}
 								folder={fileOrFolder}
-								collapsed={collapsedFolders.has(fileOrFolder.fullPath)}
+								collapsed={!expandedFolders.has(fileOrFolder.fullPath)}
 								loading={loadingFolders.has(fileOrFolder.fullPath)}
-								onToggle={toggleCollapseState}
+								onToggle={onFolderToggle}
 								onHover={onFolderHover}
 								withCheckbox={withCheckboxes}
-								checked={isPathSelected(fileOrFolder.fullPath) && !isPartiallySelected(fileOrFolder.fullPath)}
+								checked={
+									isPathSelected(fileOrFolder.fullPath) && !isPartiallySelected(fileOrFolder.fullPath)
+								}
 								partiallyChecked={isPartiallySelected(fileOrFolder.fullPath)}
 								onCheckboxChange={handleSelectionChange}
 								selectableMode={selectableFolders}
@@ -372,6 +332,21 @@ export const FileTree = memo((props: Props) => {
 						);
 						break;
 					}
+				}
+
+				const folderError = expandedFolders.has(fileOrFolder.fullPath)
+					? renderFolderError?.(fileOrFolder.fullPath)
+					: null;
+				if (folderError) {
+					elements.push(
+						<div
+							key={`error:${fileOrFolder.fullPath}`}
+							className="py-1.5 pr-2"
+							style={{ paddingLeft: 8 + (fileOrFolder.depth + 1) * NODE_PADDING_LEFT }}
+						>
+							{folderError}
+						</div>,
+					);
 				}
 
 				// Check if this is the last child of any folder with more files to load
@@ -394,6 +369,7 @@ export const FileTree = memo((props: Props) => {
 
 				return elements;
 			})}
+			{rootError && <div className="px-2 py-1.5">{rootError}</div>}
 		</div>
 	);
 });
@@ -402,7 +378,7 @@ interface FolderProps {
 	folder: FolderNode;
 	collapsed: boolean;
 	loading?: boolean;
-	onToggle: (fullPath: string) => void;
+	onToggle?: (fullPath: string, expanded: boolean) => void;
 	onHover?: (fullPath: string) => void;
 	withCheckbox?: boolean;
 	checked?: boolean;
@@ -434,9 +410,11 @@ const Folder = memo(
 		const handleChevronClick = useCallback(
 			(e: React.MouseEvent) => {
 				e.stopPropagation();
-				onToggle(fullPath);
+				if (!loading) {
+					onToggle?.(fullPath, collapsed);
+				}
 			},
-			[onToggle, fullPath],
+			[onToggle, fullPath, collapsed, loading],
 		);
 
 		const handleMouseEnter = useCallback(() => {
@@ -460,6 +438,7 @@ const Folder = memo(
 
 		return (
 			<NodeButton
+				label={name}
 				className={cn("group", {
 					"hover:bg-accent/50 text-foreground": !selected,
 					"bg-accent text-accent-foreground": selected,
@@ -467,13 +446,25 @@ const Folder = memo(
 				})}
 				depth={depth}
 				icon={
-					loading ? (
-						<Loader2 className="w-4 h-4 shrink-0 animate-spin" />
-					) : collapsed ? (
-						<ChevronRight className="w-4 h-4 shrink-0 cursor-pointer" onClick={handleChevronClick} />
-					) : (
-						<ChevronDown className="w-4 h-4 shrink-0 cursor-pointer" onClick={handleChevronClick} />
-					)
+					<button
+						type="button"
+						aria-label={collapsed ? "Expand folder" : "Collapse folder"}
+						title={`${collapsed ? "Expand" : "Collapse"} ${name}`}
+						aria-expanded={!collapsed}
+						aria-busy={loading}
+						aria-disabled={loading}
+						onClick={handleChevronClick}
+						onKeyDown={(event) => event.stopPropagation()}
+						className="shrink-0 cursor-pointer"
+					>
+						{loading ? (
+							<Loader2 className="w-4 h-4 animate-spin" />
+						) : collapsed ? (
+							<ChevronRight className="w-4 h-4" />
+						) : (
+							<ChevronDown className="w-4 h-4" />
+						)}
+					</button>
 				}
 				onClick={selectableMode ? handleFolderClick : undefined}
 				onMouseEnter={handleMouseEnter}
@@ -526,7 +517,11 @@ const File = memo(({ file, onFileSelect, selected, withCheckbox, checked, onChec
 			onClick={handleClick}
 		>
 			{withCheckbox && (
-				<Checkbox checked={checked} onCheckedChange={handleCheckboxChange} onClick={(e) => e.stopPropagation()} />
+				<Checkbox
+					checked={checked}
+					onCheckedChange={handleCheckboxChange}
+					onClick={(e) => e.stopPropagation()}
+				/>
 			)}
 			<span className="truncate">{name}</span>
 			{typeof size === "number" && (
@@ -564,6 +559,7 @@ const LoadMoreButton = memo(({ depth, onClick, isLoading }: LoadMoreButtonProps)
 });
 
 interface ButtonProps {
+	label?: string;
 	depth: number;
 	icon: ReactNode;
 	children: ReactNode;
@@ -572,7 +568,7 @@ interface ButtonProps {
 	onMouseEnter?: () => void;
 }
 
-const NodeButton = memo(({ depth, icon, onClick, onMouseEnter, className, children }: ButtonProps) => {
+const NodeButton = memo(({ label, depth, icon, onClick, onMouseEnter, className, children }: ButtonProps) => {
 	const paddingLeft = useMemo(() => `${8 + depth * NODE_PADDING_LEFT}px`, [depth]);
 
 	const handleKeyDown = useCallback(
@@ -589,6 +585,7 @@ const NodeButton = memo(({ depth, icon, onClick, onMouseEnter, className, childr
 		<div
 			// oxlint-disable-next-line jsx_a11y/prefer-tag-over-role
 			role="button"
+			aria-label={label}
 			tabIndex={0}
 			className={cn("flex items-center gap-2 w-full pr-2 text-sm py-1.5 text-left", className)}
 			style={{ paddingLeft }}
@@ -622,12 +619,9 @@ interface FolderNode extends BaseNode {
 
 function buildFileList(files: FileEntry[], foldersOnly = false): Node[] {
 	const fileMap = new Map<string, Node>();
+	const entries = buildFileEntryMap(foldersOnly ? files.filter((file) => file.type !== "file") : files);
 
-	for (const file of files) {
-		if (foldersOnly && file.type === "file") {
-			continue;
-		}
-
+	for (const file of entries.values()) {
 		const segments = file.path.split("/").filter((segment) => segment);
 		const depth = segments.length - 1;
 		const name = segments[segments.length - 1];
@@ -645,33 +639,6 @@ function buildFileList(files: FileEntry[], foldersOnly = false): Node[] {
 				fullPath: file.path,
 				depth,
 				size: file.size,
-			});
-		}
-
-		let parentPath = file.path;
-		while (true) {
-			const lastSlashIndex = parentPath.lastIndexOf("/");
-			if (lastSlashIndex <= 0) {
-				break;
-			}
-
-			parentPath = parentPath.slice(0, lastSlashIndex);
-			if (fileMap.has(parentPath)) {
-				continue;
-			}
-
-			const parentSegments = parentPath.split("/").filter((segment) => segment);
-			const parentName = parentSegments[parentSegments.length - 1];
-			if (!parentName) {
-				continue;
-			}
-
-			fileMap.set(parentPath, {
-				kind: "folder",
-				id: fileMap.size,
-				name: parentName,
-				fullPath: parentPath,
-				depth: parentSegments.length - 1,
 			});
 		}
 	}

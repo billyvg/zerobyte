@@ -39,6 +39,8 @@ import { agentsService } from "../agents/agents.service";
 import { LOCAL_AGENT_ID } from "../agents/constants";
 import { taskStore } from "../tasks/tasks.store";
 import { Effect } from "effect";
+import { normalizeRequiredName } from "~/server/utils/names";
+import { bandwidthFields } from "./repository-bandwidth-fields";
 
 const lsLimiters = new Map<string, Effect.Semaphore>();
 const RESTORE_TASK_RESOURCE_TYPE = "repository";
@@ -140,10 +142,24 @@ const listRepositories = async () => {
 	return repositories;
 };
 
-const createRepository = async (name: string, config: RepositoryConfig, compressionMode?: CompressionMode) => {
+const createRepository = async (
+	name: string,
+	config: RepositoryConfig,
+	compressionMode?: CompressionMode,
+	autoCheckEnabled?: boolean,
+) => {
 	const organizationId = getOrganizationId();
+	const normalizedName = normalizeRequiredName(name);
+
+	if (normalizedName === null) {
+		throw new BadRequestError("Repository name cannot be empty");
+	}
+
 	const id = Bun.randomUUIDv7();
 	const shortId = generateShortId();
+	const resolvedCompressionMode = compressionMode ?? "auto";
+	const resolvedAutoCheckEnabled = autoCheckEnabled ?? true;
+	const bandwidth = bandwidthFields(config);
 	if (config.backend === "local" && !config.isExistingRepository) {
 		config.path = `${config.path}/${shortId}`;
 	}
@@ -155,11 +171,13 @@ const createRepository = async (name: string, config: RepositoryConfig, compress
 		.values({
 			id,
 			shortId,
-			name: name.trim(),
+			name: normalizedName,
 			type: config.backend,
 			config: encryptedConfig,
-			compressionMode: compressionMode ?? "auto",
+			compressionMode: resolvedCompressionMode,
+			autoCheckEnabled: resolvedAutoCheckEnabled,
 			status: "unknown",
+			...bandwidth,
 			organizationId,
 		})
 		.returning();
@@ -180,7 +198,6 @@ const createRepository = async (name: string, config: RepositoryConfig, compress
 		const initResult = await runEffectPromise(
 			restic.init(encryptedConfig, {
 				organizationId,
-				timeoutMs: appConfig.serverIdleTimeout * 1000,
 			}),
 		);
 		error = initResult.error;
@@ -314,17 +331,7 @@ const listSnapshotFiles = async (
 	const limit = options?.limit ?? 500;
 
 	const cacheKey = cacheKeys.repository.ls(repository.id, snapshotId, path, offset, limit);
-	type LsResult = {
-		snapshot: {
-			id: string;
-			short_id: string;
-			time: string;
-			hostname: string;
-			paths: string[];
-		} | null;
-		nodes: { name: string; type: string; path: string; size?: number; mode?: number }[];
-		pagination: { offset: number; limit: number; total: number; hasMore: boolean };
-	};
+	type LsResult = Effect.Effect.Success<ReturnType<typeof restic.ls>>;
 	const cached = cache.get<LsResult>(cacheKey);
 	if (cached?.snapshot) {
 		return {
@@ -768,11 +775,14 @@ const updateRepository = async (shortId: ShortId, updates: UpdateRepositoryBody)
 	const existingConfig = existingConfigResult.data;
 
 	let newName = existing.name;
-	if (updates.name) {
-		newName = updates.name.trim();
-		if (newName.length === 0) {
+	if (updates.name !== undefined) {
+		const normalizedName = normalizeRequiredName(updates.name);
+
+		if (normalizedName === null) {
 			throw new BadRequestError("Repository name cannot be empty");
 		}
+
+		newName = normalizedName;
 	}
 
 	let parsedConfig = existingConfig;
@@ -793,12 +803,17 @@ const updateRepository = async (shortId: ShortId, updates: UpdateRepositoryBody)
 	const decryptedExisting = await decryptRepositoryConfig(existingConfig);
 	const configChanged = updates.config && JSON.stringify(decryptedExisting) !== JSON.stringify(parsedConfig);
 	const encryptedConfig = updates.config ? await encryptRepositoryConfig(parsedConfig) : existingConfig;
+	const resolvedCompressionMode = updates.compressionMode ?? existing.compressionMode;
+	const resolvedAutoCheckEnabled = updates.autoCheckEnabled ?? existing.autoCheckEnabled;
+	const bandwidth = bandwidthFields(parsedConfig);
 	const updatedAt = Date.now();
 	const updatePayload: Partial<RepositoryInsert> = {
 		name: newName,
-		compressionMode: updates.compressionMode ?? existing.compressionMode,
+		compressionMode: resolvedCompressionMode,
+		autoCheckEnabled: resolvedAutoCheckEnabled,
 		updatedAt,
 		config: encryptedConfig,
+		...bandwidth,
 	};
 
 	if (configChanged) {

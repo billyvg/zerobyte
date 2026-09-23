@@ -1,19 +1,21 @@
 import { useMutation } from "@tanstack/react-query";
-import { AlertTriangle, Download } from "lucide-react";
+import { useNavigate } from "@tanstack/react-router";
+import { AlertTriangle, ArrowRight, CheckCircle2, Download, Upload } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
+import { downloadResticPasswordMutation } from "~/client/api-client/@tanstack/react-query.gen";
 import { AuthLayout } from "~/client/components/auth-layout";
 import { Alert, AlertDescription, AlertTitle } from "~/client/components/ui/alert";
-import { Button } from "~/client/components/ui/button";
+import { Button, buttonVariants } from "~/client/components/ui/button";
 import { Input } from "~/client/components/ui/input";
 import { Label } from "~/client/components/ui/label";
-import { downloadResticPasswordMutation } from "~/client/api-client/@tanstack/react-query.gen";
+import { downloadFile } from "~/client/lib/download";
+import { ConfigImportForm } from "~/client/modules/auth/components/config-import-form";
 import { parseError } from "~/client/lib/errors";
 import {
 	RECOVERY_KEY_DOWNLOAD_SKIPPED_COOKIE_MAX_AGE,
 	RECOVERY_KEY_DOWNLOAD_SKIPPED_COOKIE_NAME,
 } from "~/lib/recovery-key-skip";
-import { useNavigate } from "@tanstack/react-router";
 
 const RECOVERY_KEY_PASSWORD_REQUIRED_MESSAGE =
 	"Downloading the recovery key requires a local password. Ask an operator to run `docker exec -it zerobyte bun run cli reset-password` for your user, then sign in with that password and try again.";
@@ -29,24 +31,24 @@ export function DownloadRecoveryKeyPage({ passwordAuthSupported, hasPassword, us
 	const navigate = useNavigate();
 	const [password, setPassword] = useState("");
 	const [blockedMessage, setBlockedMessage] = useState<string | null>(null);
+	const [importWarnings, setImportWarnings] = useState<string[] | null>(null);
 	const isDesktopRuntime = runtime === "desktop";
+	const goToVolumes = () => {
+		void navigate({ to: "/volumes", replace: true });
+	};
 
 	const downloadResticPassword = useMutation({
 		...downloadResticPasswordMutation(),
 		onSuccess: (data) => {
-			const blob = new Blob([data], { type: "text/plain" });
-			const url = window.URL.createObjectURL(blob);
-			const a = document.createElement("a");
-			a.href = url;
-			a.download = "restic.pass";
-			document.body.appendChild(a);
-			a.click();
-			document.body.removeChild(a);
-			window.setTimeout(() => window.URL.revokeObjectURL(url), 60_000);
+			downloadFile({
+				content: data,
+				contentType: "text/plain",
+				fileName: "restic.pass",
+			});
 
 			toast.success("Recovery key downloaded successfully!");
 			setBlockedMessage(null);
-			void navigate({ to: "/volumes", replace: true });
+			goToVolumes();
 		},
 		onError: (error) => {
 			const message = parseError(error)?.message;
@@ -55,8 +57,8 @@ export function DownloadRecoveryKeyPage({ passwordAuthSupported, hasPassword, us
 		},
 	});
 
-	const handleSubmit = (e: React.SubmitEvent) => {
-		e.preventDefault();
+	const handleSubmit = (event: React.SubmitEvent) => {
+		event.preventDefault();
 
 		if (passwordAuthSupported && !password) {
 			toast.error("Password is required");
@@ -64,8 +66,9 @@ export function DownloadRecoveryKeyPage({ passwordAuthSupported, hasPassword, us
 		}
 
 		setBlockedMessage(null);
+		const accountPassword = passwordAuthSupported ? password : "";
 		downloadResticPassword.mutate({
-			body: { password: passwordAuthSupported ? password : "" },
+			body: { password: accountPassword },
 		});
 	};
 
@@ -73,8 +76,52 @@ export function DownloadRecoveryKeyPage({ passwordAuthSupported, hasPassword, us
 		if (!userId) return;
 
 		document.cookie = `${RECOVERY_KEY_DOWNLOAD_SKIPPED_COOKIE_NAME}=${userId}; path=/; max-age=${RECOVERY_KEY_DOWNLOAD_SKIPPED_COOKIE_MAX_AGE}`;
-		void navigate({ to: "/volumes", replace: true });
+		goToVolumes();
 	};
+
+	if (importWarnings !== null) {
+		const hasWarnings = importWarnings.length > 0;
+		const description = hasWarnings
+			? "Your configuration was imported, but some items need your attention."
+			: "Your configuration is ready to use.";
+		const alertVariant = hasWarnings ? "warning" : "default";
+		const alertTitle = hasWarnings ? "Review required" : "Import complete";
+		const continueLabel = hasWarnings ? "I understand, continue" : "Continue";
+
+		return (
+			<AuthLayout title="Configuration imported" description={description}>
+				<div className="space-y-6">
+					<Alert variant={alertVariant}>
+						{hasWarnings ? <AlertTriangle className="size-5" /> : <CheckCircle2 className="size-5" />}
+						<AlertTitle>{alertTitle}</AlertTitle>
+						<AlertDescription className="space-y-3">
+							{hasWarnings ? (
+								<>
+									<p>
+										The export contains settings and credentials, not backup data. Restore or mount
+										these local resources before using them:
+									</p>
+									<ul className="list-disc space-y-2 break-words pl-5">
+										{importWarnings.map((warning) => (
+											<li key={warning}>{warning}</li>
+										))}
+									</ul>
+									<p>Affected schedules stay disabled until you validate their paths.</p>
+								</>
+							) : (
+								<p>Your repositories, volumes, schedules, and notifications were imported.</p>
+							)}
+						</AlertDescription>
+					</Alert>
+
+					<Button variant="primary" className="w-full" onClick={goToVolumes}>
+						{continueLabel}
+						<ArrowRight className="ml-2 size-4" />
+					</Button>
+				</div>
+			</AuthLayout>
+		);
+	}
 
 	return (
 		<AuthLayout
@@ -84,7 +131,7 @@ export function DownloadRecoveryKeyPage({ passwordAuthSupported, hasPassword, us
 			{isDesktopRuntime && (
 				<Alert variant="warning" className="mb-3">
 					<AlertTriangle className="size-5" />
-					<AlertTitle>Zerobyte Alpha</AlertTitle>
+					<AlertTitle>Zerobyte</AlertTitle>
 					<AlertDescription>
 						This desktop app is an early Alpha. Expect changes, verify restores, and keep this recovery key
 						somewhere outside the app.
@@ -118,7 +165,7 @@ export function DownloadRecoveryKeyPage({ passwordAuthSupported, hasPassword, us
 							id="password"
 							type="password"
 							value={password}
-							onChange={(e) => setPassword(e.target.value)}
+							onChange={(event) => setPassword(event.target.value)}
 							placeholder="Enter your password"
 							required
 							disabled={downloadResticPassword.isPending}
@@ -147,6 +194,18 @@ export function DownloadRecoveryKeyPage({ passwordAuthSupported, hasPassword, us
 					</Button>
 				</div>
 			</form>
+
+			<div className="my-6 border-t border-border/60" />
+
+			<details>
+				<summary className={buttonVariants({ variant: "link", className: "list-none px-0" })}>
+					<Upload className="mr-2 size-4" />
+					Import configuration
+				</summary>
+				<div className="mt-6">
+					<ConfigImportForm onSuccess={setImportWarnings} />
+				</div>
+			</details>
 		</AuthLayout>
 	);
 }

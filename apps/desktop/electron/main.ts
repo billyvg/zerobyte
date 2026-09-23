@@ -1,14 +1,26 @@
-import { app, BrowserWindow, dialog, ipcMain, nativeTheme, type OpenDialogOptions, type Tray } from "electron";
+import {
+	app,
+	BrowserWindow,
+	dialog,
+	ipcMain,
+	Menu,
+	nativeTheme,
+	session,
+	shell,
+	type OpenDialogOptions,
+	type Tray,
+} from "electron";
 import { toMessage } from "@zerobyte/core/utils";
 import { startDesktopRuntime, type DesktopRuntime } from "./desktop-runtime";
 import { createDesktopSession } from "./desktop-session";
 import { createTray, createTrayPopoverWindow, toggleTrayPopover, updateTrayStatus } from "./desktop-tray";
 import { createDesktopWindow } from "./desktop-window";
 import { saveSecurityScopedBookmark, startAccessingSavedBookmarks } from "./security-scoped-bookmarks";
+import { closeDesktopLog, writeDesktopLog } from "./desktop-log";
 
 const trayStatusPollMs = 30_000;
 
-app.setName("Zerobyte Alpha");
+app.setName("Zerobyte");
 
 type BackupScheduleTrayStatus = {
 	lastBackupStatus: "success" | "error" | "in_progress" | "warning" | null;
@@ -18,7 +30,6 @@ let mainWindow: BrowserWindow | null = null;
 let trayPopoverWindow: BrowserWindow | null = null;
 let tray: Tray | null = null;
 let runtime: DesktopRuntime | null = null;
-let authCookieHeader: string | null = null;
 let stopAccessingBookmarks: (() => void) | null = null;
 let isQuitting = false;
 let trayStatusTimer: ReturnType<typeof setInterval> | null = null;
@@ -111,15 +122,14 @@ const getTrayPopoverWindow = async () => {
 };
 
 const refreshTrayStatus = async () => {
-	if (!runtime || !tray || !authCookieHeader) {
+	if (!runtime || !tray) {
 		return;
 	}
 
 	try {
-		const response = await fetch(`${runtime.url}/api/v1/backups`, {
-			headers: {
-				cookie: authCookieHeader,
-			},
+		const response = await session.defaultSession.fetch(`${runtime.url}/api/v1/backups`, {
+			redirect: "error",
+			credentials: "include",
 		});
 
 		if (!response.ok) {
@@ -145,6 +155,7 @@ const setupTray = () => {
 			void getTrayPopoverWindow()
 				.then((window) => toggleTrayPopover(window, bounds))
 				.catch((error) => {
+					writeDesktopLog("desktop", error);
 					dialog.showErrorBox("Zerobyte tray failed to open", toMessage(error));
 				});
 		},
@@ -159,17 +170,25 @@ if (!app.requestSingleInstanceLock()) {
 
 	void app.whenReady().then(async () => {
 		try {
+			writeDesktopLog(
+				"desktop",
+				`Starting Zerobyte ${import.meta.env.VITE_APP_VERSION || app.getVersion()} on ${process.platform}/${process.arch}; Electron ${process.versions.electron}`,
+			);
+			if (process.platform !== "darwin") {
+				Menu.setApplicationMenu(null);
+			}
 			nativeTheme.themeSource = "dark";
 			stopAccessingBookmarks = await startAccessingSavedBookmarks();
 			runtime = await startDesktopRuntime((status) => {
 				dialog.showErrorBox("Zerobyte stopped", `Server process exited with ${status}`);
 			});
-			authCookieHeader = await createDesktopSession(runtime.url, runtime.launchSecret);
+			await createDesktopSession(runtime.url, runtime.launchSecret);
 			setupTray();
 			void refreshTrayStatus();
 			trayStatusTimer = setInterval(() => void refreshTrayStatus(), trayStatusPollMs);
 			await createWindow();
 		} catch (error) {
+			writeDesktopLog("desktop:startup", error);
 			if (trayStatusTimer) clearInterval(trayStatusTimer);
 			stopAccessingBookmarks?.();
 			stopAccessingBookmarks = null;
@@ -179,14 +198,22 @@ if (!app.requestSingleInstanceLock()) {
 	});
 }
 
-app.on("before-quit", () => {
+let shutdownStarted = false;
+app.on("before-quit", (event) => {
+	event.preventDefault();
+	if (shutdownStarted) return;
+	shutdownStarted = true;
 	isQuitting = true;
+
+	const finish = () => app.exit(0);
+	setTimeout(finish, 1_000);
+
 	if (trayStatusTimer) clearInterval(trayStatusTimer);
+	if (runtime) writeDesktopLog("desktop", "Stopping Zerobyte");
+
 	runtime?.stop();
-	runtime = null;
-	authCookieHeader = null;
 	stopAccessingBookmarks?.();
-	stopAccessingBookmarks = null;
+	void closeDesktopLog().then(finish, finish);
 });
 
 app.on("window-all-closed", () => {});
@@ -198,6 +225,7 @@ ipcMain.handle("desktop:choose-folder", (event) => {
 
 	return chooseFolder();
 });
+
 ipcMain.handle("desktop:open-main-window", (event, appPath?: unknown) => {
 	if (!isTrustedDesktopSender(event.senderFrame?.url)) {
 		throw new Error("Invalid desktop IPC sender");
@@ -212,13 +240,21 @@ ipcMain.handle("desktop:open-main-window", (event, appPath?: unknown) => {
 
 	return createWindow(appPath);
 });
+
 ipcMain.on("desktop:quit", (event) => {
 	if (!isTrustedDesktopSender(event.senderFrame?.url)) return;
 	quitApp();
 });
+
 ipcMain.on("desktop:set-theme", (event, theme) => {
 	if (!isTrustedDesktopSender(event.senderFrame?.url)) return;
 	if (theme === "light" || theme === "dark") {
 		nativeTheme.themeSource = theme;
 	}
+});
+
+ipcMain.handle("desktop:open-privacy-settings", async (event) => {
+	if (!isTrustedDesktopSender(event.senderFrame?.url)) throw new Error("Invalid desktop IPC sender");
+	if (process.platform !== "darwin") return;
+	await shell.openExternal("x-apple.systempreferences:com.apple.preference.security?Privacy_FilesAndFolders");
 });

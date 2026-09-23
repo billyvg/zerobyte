@@ -1,0 +1,139 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`config transfer payload graph > decodes the historical v1 fixture into the current import model 1`] = `
+{
+  "backupScheduleMirrors": [
+    {
+      "enabled": false,
+      "repositoryRef": "repository:2",
+      "scheduleRef": "schedule:1",
+    },
+  ],
+  "backupScheduleNotifications": [
+    {
+      "destinationRef": "destination:1",
+      "notifyOnFailure": false,
+      "notifyOnStart": true,
+      "notifyOnSuccess": false,
+      "notifyOnWarning": true,
+      "scheduleRef": "schedule:1",
+    },
+  ],
+  "backupSchedules": [
+    {
+      "backupWebhooks": null,
+      "compressionMode": "off",
+      "cronExpression": "0 2 * * *",
+      "customResticParams": [
+        "--pack-size 64",
+      ],
+      "enabled": true,
+      "excludeIfPresent": [
+        ".nobackup",
+      ],
+      "excludePatterns": [
+        "*.tmp",
+        "cache/**",
+      ],
+      "includePaths": [
+        "/Documents",
+      ],
+      "includePatterns": [
+        "**/*.md",
+      ],
+      "maxRetries": 4,
+      "name": "Fixture Nightly Backup",
+      "oneFileSystem": true,
+      "ref": "schedule:1",
+      "repositoryRef": "repository:1",
+      "retentionPolicy": {
+        "keepDaily": 2,
+        "keepLast": 5,
+        "keepWithinDuration": "30d",
+      },
+      "retryDelay": 120000,
+      "shortId": "sched001",
+      "sortOrder": 8,
+      "volumeRef": "volume:1",
+    },
+  ],
+  "notificationDestinations": [
+    {
+      "config": {
+        "contentType": "application/json",
+        "headers": [
+          "X-Fixture: true",
+        ],
+        "messageKey": "message",
+        "method": "POST",
+        "titleKey": "title",
+        "type": "generic",
+        "url": "https://example.com/fixture-webhook",
+        "useJson": true,
+      },
+      "enabled": true,
+      "name": "Fixture Notification",
+      "ref": "destination:1",
+    },
+  ],
+  "repositories": [
+    {
+      "autoCheckEnabled": true,
+      "compressionMode": "max",
+      "config": {
+        "backend": "rclone",
+        "customPassword": "fixture-primary-password",
+        "downloadLimit": {
+          "enabled": false,
+          "unit": "Kbps",
+          "value": 5,
+        },
+        "path": "/primary",
+        "remote": "fixture-primary",
+        "uploadLimit": {
+          "enabled": true,
+          "unit": "Mbps",
+          "value": 100,
+        },
+      },
+      "name": "Fixture Primary Repository",
+      "ref": "repository:1",
+    },
+    {
+      "autoCheckEnabled": false,
+      "compressionMode": "off",
+      "config": {
+        "backend": "rclone",
+        "downloadLimit": {
+          "enabled": true,
+          "unit": "Mbps",
+          "value": 9,
+        },
+        "path": "/mirror",
+        "remote": "fixture-mirror",
+        "uploadLimit": {
+          "enabled": false,
+          "unit": "Kbps",
+          "value": 5,
+        },
+      },
+      "name": "Fixture Mirror Repository",
+      "ref": "repository:2",
+    },
+  ],
+  "resticPassword": "test-restic-password",
+  "volumes": [
+    {
+      "autoRemount": false,
+      "config": {
+        "backend": "rclone",
+        "path": "/data",
+        "readOnly": true,
+        "remote": "fixture-volume",
+      },
+      "name": "Fixture Volume",
+      "ref": "volume:1",
+    },
+  ],
+}
+`;

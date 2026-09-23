@@ -31,6 +31,7 @@ export const repositorySchema = z.object({
 	lastChecked: z.number().nullable(),
 	lastError: z.string().nullable(),
 	doctorResult: doctorResultSchema.nullable(),
+	autoCheckEnabled: z.boolean(),
 	createdAt: z.number(),
 	updatedAt: z.number(),
 });
@@ -57,6 +58,7 @@ export const listRepositoriesDto = describeRoute({
 export const createRepositoryBody = z.object({
 	name: z.string(),
 	compressionMode: z.enum(COMPRESSION_MODES).optional(),
+	autoCheckEnabled: z.boolean().optional(),
 	config: repositoryConfigSchema,
 });
 
@@ -168,6 +170,7 @@ export const deleteRepositoryDto = describeRoute({
 export const updateRepositoryBody = z.object({
 	name: z.string().optional(),
 	compressionMode: z.enum(COMPRESSION_MODES).optional(),
+	autoCheckEnabled: z.boolean().optional(),
 	config: repositoryConfigSchema.optional(),
 });
 
@@ -209,7 +212,7 @@ const snapshotSchema = z.object({
 	duration: z.number(),
 	tags: z.array(z.string()),
 	retentionCategories: z.array(z.string()),
-	hostname: z.string().optional(),
+	hostname: z.string(),
 	summary: resticSnapshotSummarySchema.optional(),
 });
 

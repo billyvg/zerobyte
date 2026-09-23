@@ -1,5 +1,6 @@
-import { app, BrowserWindow, Menu, nativeImage, screen, Tray, type Rectangle } from "electron";
+import { app, BrowserWindow, dialog, Menu, nativeImage, screen, shell, Tray, type Rectangle } from "electron";
 import path from "node:path";
+import { getDesktopLogsPath } from "./desktop-log";
 
 const trayIconFileName = "tray-icon.png";
 const trayIconSize = 18;
@@ -42,7 +43,7 @@ const createTrayIcon = () => {
 };
 
 const formatTrayTooltip = ({ runningCount, attentionCount }: TrayStatus) => {
-	const parts = ["Zerobyte Alpha"];
+	const parts = ["Zerobyte"];
 
 	if (runningCount > 0) {
 		parts.push(`${runningCount} running`);
@@ -108,7 +109,7 @@ export const createTrayPopoverWindow = async ({ serverUrl, isQuitting }: TrayPop
 		resizable: false,
 		skipTaskbar: true,
 		alwaysOnTop: true,
-		title: "Zerobyte Alpha",
+		title: "Zerobyte",
 		backgroundColor: "#131313",
 		webPreferences: {
 			preload: path.join(__dirname, "preload.js"),
@@ -170,9 +171,16 @@ export const createTray = ({ openWindow, togglePopover, quit }: TrayOptions) => 
 	tray.on("right-click", () => {
 		tray.popUpContextMenu(
 			Menu.buildFromTemplate([
-				{ label: "Open Zerobyte Alpha", click: openWindow },
+				{ label: "Open Zerobyte", click: openWindow },
+				{
+					label: "Open logs folder",
+					click: async () => {
+						const error = await shell.openPath(getDesktopLogsPath());
+						if (error) dialog.showErrorBox("Could not open logs folder", error);
+					},
+				},
 				{ type: "separator" },
-				{ label: "Quit Zerobyte Alpha", click: quit },
+				{ label: "Quit Zerobyte", click: quit },
 			]),
 		);
 	});
