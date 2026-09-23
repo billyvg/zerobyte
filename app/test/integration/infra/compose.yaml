@@ -11,17 +11,20 @@ services:
       - rustfs-data:/data
 
   rustfs-setup:
-    image: minio/mc:latest
+    image: rustfs/rc:latest
     depends_on:
       - rustfs
     entrypoint: ["/bin/sh", "-c"]
     command:
       - |
-        until mc alias set rustfs http://rustfs:9000 rustfsadmin rustfsadmin --api S3v4 --path on; do
+        rc alias set rustfs http://rustfs:9000 rustfsadmin rustfsadmin --signature v4 --bucket-lookup path --region us-east-1
+
+        until rc ready rustfs --timeout 1; do
           echo "Waiting for RustFS..."
           sleep 1
         done
-        mc mb --ignore-existing --region us-east-1 rustfs/zerobyte-integration
+
+        rc bucket create --ignore-existing --region us-east-1 rustfs/zerobyte-integration
 
   sftp:
     build:

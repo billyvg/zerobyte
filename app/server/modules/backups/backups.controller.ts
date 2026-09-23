@@ -22,11 +22,11 @@ import {
 	updateScheduleMirrorsDto,
 	updateScheduleMirrorsBody,
 	getMirrorCompatibilityDto,
-	getMirrorSyncStatusDto,
 	reorderBackupSchedulesDto,
 	reorderBackupSchedulesBody,
 	syncMirrorBody,
 	syncMirrorDto,
+	startMirrorStatusDto,
 	type CreateBackupScheduleDto,
 	type DeleteBackupScheduleDto,
 	type GetBackupScheduleDto,
@@ -40,8 +40,8 @@ import {
 	type UpdateScheduleMirrorsDto,
 	type GetMirrorCompatibilityDto,
 	type ReorderBackupSchedulesDto,
-	type GetMirrorSyncStatusDto,
 	type SyncMirrorDto,
+	type StartMirrorStatusDto,
 } from "./backups.dto";
 import { backupsService } from "./backups.service";
 import {
@@ -151,12 +151,12 @@ export const backupScheduleController = new Hono()
 
 		return c.json<UpdateScheduleMirrorsDto>(mirrors, 200);
 	})
-	.get("/:shortId/mirrors/:mirrorShortId/status", getMirrorSyncStatusDto, async (c) => {
+	.post("/:shortId/mirrors/:mirrorShortId/status", startMirrorStatusDto, async (c) => {
 		const shortId = asShortId(c.req.param("shortId"));
 		const mirrorShortId = asShortId(c.req.param("mirrorShortId"));
-		const status = await backupsService.getMirrorSyncStatus(shortId, mirrorShortId);
+		const result = await backupsService.startMirrorStatus(shortId, mirrorShortId);
 
-		return c.json<GetMirrorSyncStatusDto>(status, 200);
+		return c.json<StartMirrorStatusDto>(result, 202);
 	})
 	.post("/:shortId/mirrors/:mirrorShortId/sync", syncMirrorDto, validator("json", syncMirrorBody), async (c) => {
 		const shortId = asShortId(c.req.param("shortId"));

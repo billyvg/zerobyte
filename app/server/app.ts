@@ -1,13 +1,13 @@
-import { Scalar } from "@scalar/hono-api-reference";
 import type { Context, Next } from "hono";
 import { Hono } from "hono";
 import { bodyLimit } from "hono/body-limit";
 import { cors } from "hono/cors";
 import { secureHeaders } from "hono/secure-headers";
 import { rateLimiter } from "hono-rate-limiter";
-import { openAPIRouteHandler } from "hono-openapi";
+import { apiDocsHandler, createOpenApiHandler } from "./api-docs";
 import { authController } from "./modules/auth/auth.controller";
 import { ssoController } from "./modules/sso/sso.controller";
+import { handleAuthCallbackErrors } from "./modules/sso/middlewares/handle-auth-callback-errors";
 import { conditionalRequireAuth } from "./modules/auth/auth.middleware";
 import { repositoriesController } from "./modules/repositories/repositories.controller";
 import { systemController } from "./modules/system/system.controller";
@@ -38,24 +38,6 @@ const requestLogger = async (c: Context, next: Next) => {
 		logger.debug(`--> ${method} ${path} ${c.res.status} ${Math.round(performance.now() - start)}ms`);
 	}
 };
-
-const generalDescriptor = (app: Hono) =>
-	openAPIRouteHandler(app, {
-		documentation: {
-			info: {
-				title: "Zerobyte API",
-				version: "1.0.0",
-				description: "API for managing volumes",
-			},
-			servers: [{ url: `http://${config.serverIp}:4096`, description: "Development Server" }],
-		},
-	});
-
-const scalarDescriptor = Scalar({
-	title: "Zerobyte API Docs",
-	pageTitle: "Zerobyte API Docs",
-	url: "/api/v1/openapi.json",
-});
 
 export const createApp = () => {
 	db.run("PRAGMA foreign_keys = ON;");
@@ -101,6 +83,7 @@ export const createApp = () => {
 		.route("/api/v1/desktop", desktopController)
 		.route("/api/v1/events", eventsController);
 
+	app.use("/api/auth/*", handleAuthCallbackErrors);
 	app.on(["POST", "GET"], "/api/auth/*", async (c) => {
 		const pathname = new URL(c.req.url).pathname;
 		if (pathname.startsWith("/api/auth/api-key/")) {
@@ -124,13 +107,14 @@ export const createApp = () => {
 
 		return auth.handler(c.req.raw);
 	});
-	app.get("/api/v1/openapi.json", conditionalRequireAuth(config.__prod__), generalDescriptor(app));
-	app.get("/api/v1/docs", conditionalRequireAuth(config.__prod__), scalarDescriptor);
+	const openApiHandler = createOpenApiHandler(app);
+	app.get("/api/v1/openapi.json", conditionalRequireAuth(config.__prod__), openApiHandler);
+	app.get("/api/v1/docs", conditionalRequireAuth(config.__prod__), apiDocsHandler);
 
 	app.onError((err, c) => {
 		const { status, message, details } = handleServiceError(err);
 
-		logger.error(`${c.req.url}: ${message}`);
+		logger.error(`${c.req.path}: ${message}`);
 
 		if (err.cause instanceof Error) {
 			logger.error(err.cause.message);

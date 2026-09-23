@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { parseError } from "~/client/lib/errors";
 import { logger } from "~/client/lib/logger";
 import type { FileEntry } from "../components/file-tree";
 
@@ -36,6 +37,7 @@ type FolderPaginationState = {
 
 export const useFileBrowser = (props: UseFileBrowserOptions) => {
 	const { initialData, isLoading, fetchFolder, prefetchFolder, pathTransform, rootPath = "/" } = props;
+	const [folderErrors, setFolderErrors] = useState<ReadonlyMap<string, string>>(new Map());
 	const [expandedFolders, setExpandedFolders] = useState<Set<string>>(new Set());
 	const [fetchedFolders, setFetchedFolders] = useState<Set<string>>(new Set([rootPath]));
 	const [loadingFolders, setLoadingFolders] = useState<Set<string>>(new Set());
@@ -45,9 +47,19 @@ export const useFileBrowser = (props: UseFileBrowserOptions) => {
 	const stripPath = pathTransform?.strip;
 	const addPath = pathTransform?.add;
 
+	const setFolderError = useCallback((path: string, message?: string) => {
+		setFolderErrors((prev) => {
+			const next = new Map(prev);
+			if (message === undefined) next.delete(path);
+			else next.set(path, message);
+			return next;
+		});
+	}, []);
+
 	useEffect(() => {
 		if (initialData?.files) {
 			const files = initialData.files;
+			// oxlint-disable-next-line react/set-state-in-effect -- Merge refreshed root results into the folder cache without discarding loaded pages.
 			setAllFiles((prev) => {
 				const next = new Map(prev);
 				for (const file of files) {
@@ -85,68 +97,74 @@ export const useFileBrowser = (props: UseFileBrowserOptions) => {
 
 	const fileArray = useMemo(() => Array.from(allFiles.values()), [allFiles]);
 
-	const handleFolderExpand = useCallback(
-		async (folderPath: string) => {
+	const handleFolderToggle = useCallback(
+		async (folderPath: string, expanded: boolean) => {
 			setExpandedFolders((prev) => {
 				const next = new Set(prev);
-				next.add(folderPath);
+				if (expanded) {
+					next.add(folderPath);
+				} else {
+					next.delete(folderPath);
+				}
 				return next;
 			});
 
-			if (!fetchedFolders.has(folderPath)) {
-				setLoadingFolders((prev) => new Set(prev).add(folderPath));
+			if (!expanded || fetchedFolders.has(folderPath)) return;
 
-				try {
-					const pathToFetch = addPath ? addPath(folderPath) : folderPath;
-					const result = await fetchFolder(pathToFetch);
+			setFolderError(folderPath);
+			setLoadingFolders((prev) => new Set(prev).add(folderPath));
 
-					if (result.files) {
-						const files = result.files;
-						setAllFiles((prev) => {
-							const next = new Map(prev);
-							for (const file of files) {
-								const strippedPath = stripPath ? stripPath(file.path) : file.path;
-								// Skip the directory itself
-								if (strippedPath !== folderPath) {
-									next.set(strippedPath, { ...file, path: strippedPath });
-								}
+			try {
+				const pathToFetch = addPath ? addPath(folderPath) : folderPath;
+				const result = await fetchFolder(pathToFetch);
+
+				if (result.files) {
+					const files = result.files;
+					setAllFiles((prev) => {
+						const next = new Map(prev);
+						for (const file of files) {
+							const strippedPath = stripPath ? stripPath(file.path) : file.path;
+							// Skip the directory itself
+							if (strippedPath !== folderPath) {
+								next.set(strippedPath, { ...file, path: strippedPath });
 							}
-							return next;
+						}
+						return next;
+					});
+					setFolderPagination((prev) => {
+						const next = new Map(prev);
+						next.set(folderPath, {
+							currentOffset: result.offset ?? 0,
+							limit: result.limit ?? 100,
+							hasMore: result.hasMore ?? false,
+							isLoadingMore: false,
 						});
-						setFolderPagination((prev) => {
-							const next = new Map(prev);
-							next.set(folderPath, {
-								currentOffset: result.offset ?? 0,
-								limit: result.limit ?? 100,
-								hasMore: result.hasMore ?? false,
-								isLoadingMore: false,
-							});
-							return next;
-						});
-					} else if (result.directories) {
-						const directories = result.directories;
-						setAllFiles((prev) => {
-							const next = new Map(prev);
-							for (const dir of directories) {
-								next.set(dir.path, { name: dir.name, path: dir.path, type: "folder" });
-							}
-							return next;
-						});
-					}
-
-					setFetchedFolders((prev) => new Set(prev).add(folderPath));
-				} catch (error) {
-					logger.error("Failed to fetch folder contents:", error);
-				} finally {
-					setLoadingFolders((prev) => {
-						const next = new Set(prev);
-						next.delete(folderPath);
+						return next;
+					});
+				} else if (result.directories) {
+					const directories = result.directories;
+					setAllFiles((prev) => {
+						const next = new Map(prev);
+						for (const dir of directories) {
+							next.set(dir.path, { name: dir.name, path: dir.path, type: "folder" });
+						}
 						return next;
 					});
 				}
+
+				setFetchedFolders((prev) => new Set(prev).add(folderPath));
+			} catch (error) {
+				logger.error("Failed to fetch folder contents:", error);
+				setFolderError(folderPath, parseError(error)?.message ?? "Failed to read folder");
+			} finally {
+				setLoadingFolders((prev) => {
+					const next = new Set(prev);
+					next.delete(folderPath);
+					return next;
+				});
 			}
 		},
-		[fetchedFolders, fetchFolder, stripPath, addPath],
+		[fetchedFolders, fetchFolder, stripPath, addPath, setFolderError],
 	);
 
 	const handleLoadMore = useCallback(
@@ -156,6 +174,7 @@ export const useFileBrowser = (props: UseFileBrowserOptions) => {
 				return;
 			}
 
+			setFolderError(folderPath);
 			setFolderPagination((prev) => {
 				const next = new Map(prev);
 				next.set(folderPath, { ...pagination, isLoadingMore: true });
@@ -192,6 +211,7 @@ export const useFileBrowser = (props: UseFileBrowserOptions) => {
 				}
 			} catch (error) {
 				logger.error("Failed to load more files:", error);
+				setFolderError(folderPath, parseError(error)?.message ?? "Failed to read folder");
 				setFolderPagination((prev) => {
 					const next = new Map(prev);
 					next.set(folderPath, { ...pagination, isLoadingMore: false });
@@ -199,7 +219,7 @@ export const useFileBrowser = (props: UseFileBrowserOptions) => {
 				});
 			}
 		},
-		[folderPagination, fetchFolder, stripPath, addPath],
+		[folderPagination, fetchFolder, stripPath, addPath, setFolderError],
 	);
 
 	const handleFolderHover = useCallback(
@@ -220,10 +240,11 @@ export const useFileBrowser = (props: UseFileBrowserOptions) => {
 	);
 
 	return {
+		folderErrors,
 		fileArray,
 		expandedFolders,
 		loadingFolders,
-		handleFolderExpand,
+		handleFolderToggle,
 		handleFolderHover,
 		handleLoadMore,
 		getFolderPagination,

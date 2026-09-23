@@ -4,11 +4,14 @@ import { config } from "~/server/core/config";
 
 const app = createApp();
 
-type NodeRuntimeRequest = Request & {
+type RuntimeRequest = Request & {
 	ip?: string;
 	runtime?: {
 		node?: {
 			res?: { setTimeout: (timeoutMs: number) => void };
+		};
+		bun?: {
+			server: { timeout: (request: Request, timeoutSeconds: number) => void };
 		};
 	};
 };
@@ -17,8 +20,11 @@ type RequestInitWithDuplex = RequestInit & {
 	duplex?: "half";
 };
 
-const prepareApiRequest = (request: NodeRuntimeRequest, timeoutMs: number) => {
+const prepareApiRequest = (request: RuntimeRequest, timeoutSeconds: number) => {
+	const timeoutMs = timeoutSeconds * 1000;
+
 	request.runtime?.node?.res?.setTimeout(timeoutMs);
+	request.runtime?.bun?.server.timeout(request, timeoutSeconds);
 
 	if (config.trustProxy && request.headers.has("x-forwarded-for")) {
 		return request.clone();
@@ -26,6 +32,8 @@ const prepareApiRequest = (request: NodeRuntimeRequest, timeoutMs: number) => {
 
 	const remoteAddress = request.ip;
 	const headers = new Headers(request.headers);
+	const body = request.body;
+	const duplex = body ? "half" : undefined;
 
 	if (remoteAddress) {
 		headers.set("x-forwarded-for", remoteAddress);
@@ -36,16 +44,15 @@ const prepareApiRequest = (request: NodeRuntimeRequest, timeoutMs: number) => {
 	const init: RequestInitWithDuplex = {
 		method: request.method,
 		headers,
-		body: request.body,
+		body,
 		signal: request.signal,
-		duplex: request.body ? "half" : undefined,
+		duplex,
 	};
 
 	return new Request(request.url, init);
 };
 
-const handle = ({ request }: { request: Request }) =>
-	app.fetch(prepareApiRequest(request, config.serverIdleTimeout * 1000));
+const handle = ({ request }: { request: Request }) => app.fetch(prepareApiRequest(request, config.serverIdleTimeout));
 
 export const Route = createFileRoute("/api/$")({
 	server: {

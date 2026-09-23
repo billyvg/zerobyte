@@ -11,7 +11,7 @@ import { isTaskActive } from "~/client/hooks/use-active-tasks";
 import { useTimeFormat } from "~/client/lib/datetime";
 import { cn } from "~/client/lib/utils";
 import { taskHistoryOutcomes, type TaskHistoryLifecycleItem } from "~/schemas/task-history";
-import { taskKinds } from "~/schemas/tasks";
+import { activityTaskKinds } from "~/schemas/tasks";
 import { TaskDetailsDialog } from "./components/task-details-dialog";
 import { getTaskLogPagination } from "./components/task-log-pagination";
 import { TaskLogResults } from "./components/task-log-results";
@@ -39,7 +39,7 @@ type Props = {
 	onPageChange: (page: number) => void;
 };
 
-const kindOptions = taskKinds.map((value) => ({
+const kindOptions = activityTaskKinds.map((value) => ({
 	value,
 	label: taskLogKindLabels[value],
 }));
@@ -126,9 +126,11 @@ function TaskLogPageContent({
 		if (page > lastPage) onPageChange(lastPage);
 	}, [history.data, onPageChange, page]);
 
-	useEffect(() => {
+	const [previousPage, setPreviousPage] = useState(page);
+	if (previousPage !== page) {
+		setPreviousPage(page);
 		setSelection(null);
-	}, [page]);
+	}
 
 	const refresh = async () => {
 		const result = await history.refetch();

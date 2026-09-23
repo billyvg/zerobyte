@@ -1,11 +1,11 @@
-FROM oven/bun:1.3.14-alpine@sha256:5acc90a93e91ff07bf72aa90a7c9f0fa189765aec90b47bdbf2152d2196383c0 AS base
+FROM oven/bun:1.4.2-alpine@sha256:d888c0ae6c86d7866ff10c5aafdd9077b36aee6455b33dd270fb93c0dd5cef6f AS base
 
 # renovate: datasource=github-releases depName=restic/restic versioning=semver extractVersion=^v?(?<version>.+)$
 ARG RESTIC_VERSION="0.19.1"
 # renovate: datasource=github-releases depName=rclone/rclone versioning=semver extractVersion=^v?(?<version>.+)$
-ARG RCLONE_VERSION="1.75.0"
+ARG RCLONE_VERSION="1.75.1"
 # renovate: datasource=github-releases depName=nicholas-fedor/shoutrrr versioning=semver extractVersion=^v?(?<version>.+)$
-ARG SHOUTRRR_VERSION="0.17.1"
+ARG SHOUTRRR_VERSION="0.20.0"
 
 ENV VITE_RESTIC_VERSION=${RESTIC_VERSION} \
     VITE_RCLONE_VERSION=${RCLONE_VERSION} \
@@ -92,7 +92,7 @@ COPY ./apps/agent/package.json ./apps/agent/package.json
 COPY ./apps/docs/package.json ./apps/docs/package.json
 COPY ./apps/desktop/package.json ./apps/desktop/package.json
 
-RUN VITE_GIT_HOOKS=0 bun install --frozen-lockfile --ignore-scripts
+RUN VITE_GIT_HOOKS=0 bun install --frozen-lockfile --ignore-scripts --filter '!docs'
 
 COPY . .
 
@@ -118,7 +118,7 @@ COPY ./apps/agent/package.json ./apps/agent/package.json
 COPY ./apps/docs/package.json ./apps/docs/package.json
 COPY ./apps/desktop/package.json ./apps/desktop/package.json
 
-RUN VITE_GIT_HOOKS=0 bun install --frozen-lockfile
+RUN VITE_GIT_HOOKS=0 bun install --frozen-lockfile --filter '!docs'
 
 COPY . .
 

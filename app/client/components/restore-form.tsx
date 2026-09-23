@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useState } from "react";
 import { useMutation } from "@tanstack/react-query";
 import { AlertTriangle, ChevronDown, Download, FolderOpen, RotateCcw, Square } from "lucide-react";
 import { Button } from "~/client/components/ui/button";
@@ -24,16 +24,17 @@ import { cancelTaskMutation, restoreSnapshotMutation } from "~/client/api-client
 import { useRestoreTask } from "~/client/modules/repositories/restore-tasks";
 import { OVERWRITE_MODES, type OverwriteMode } from "@zerobyte/core/restic";
 import { isPathWithin } from "@zerobyte/core/utils";
-import type { Repository } from "~/client/lib/types";
+import type { Repository, Snapshot } from "~/client/lib/types";
 import { handleRepositoryError } from "~/client/lib/errors";
 import { useNavigate } from "@tanstack/react-router";
 import { cn } from "~/client/lib/utils";
+import { useTimeFormat } from "~/client/lib/datetime";
 
 type RestoreLocation = "original" | "custom";
 
 interface RestoreFormProps {
 	repository: Repository;
-	snapshotId: string;
+	snapshot: Snapshot;
 	returnPath: string;
 	queryBasePath?: string;
 	displayBasePath?: string;
@@ -43,14 +44,16 @@ interface RestoreFormProps {
 
 export function RestoreForm({
 	repository,
-	snapshotId,
+	snapshot,
 	returnPath,
 	queryBasePath,
 	displayBasePath,
 	hasNonPosixSnapshotPaths = false,
 	volumeReadOnly = false,
 }: RestoreFormProps) {
+	const snapshotId = snapshot.short_id;
 	const navigate = useNavigate();
+	const { formatDateTime } = useTimeFormat();
 
 	const snapshotBasePath = queryBasePath ?? "/";
 	const hasMismatchedDisplayBasePath = displayBasePath && !isPathWithin(displayBasePath, snapshotBasePath);
@@ -71,11 +74,9 @@ export function RestoreForm({
 	const hasCustomTargetPath = trimmedCustomTargetPath !== "";
 	const selectedPathCount = selectedPaths.size;
 
-	useEffect(() => {
-		if (restoreRequiresCustomTarget) {
-			setRestoreLocation("custom");
-		}
-	}, [restoreRequiresCustomTarget]);
+	if (restoreRequiresCustomTarget && restoreLocation !== "custom") {
+		setRestoreLocation("custom");
+	}
 
 	const {
 		data: restoreStart,
@@ -198,6 +199,7 @@ export function RestoreForm({
 					<h1 className="text-2xl font-bold">Restore Snapshot</h1>
 					<p className="text-sm text-muted-foreground">
 						{repository.name} / {snapshotId}
+						{` / ${snapshot.hostname || "Unknown"} / ${formatDateTime(snapshot.time)}`}
 					</p>
 				</div>
 				<div className="flex flex-wrap gap-2">
@@ -374,7 +376,7 @@ export function RestoreForm({
 						)}
 					</Card>
 				</div>
-				<Card className="lg:col-span-2 flex flex-col">
+				<Card className="lg:col-span-2 flex flex-col pb-0">
 					<CardHeader>
 						<CardTitle>Select Files to Restore</CardTitle>
 						<CardDescription>

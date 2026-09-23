@@ -107,6 +107,50 @@ describe("repositoriesService.createRepository", () => {
 		expect(savedConfig.path).toBe(`${REPOSITORY_BASE}/${created.shortId}`);
 		expect(savedConfig.path).not.toBe(REPOSITORY_BASE);
 		expect(created.status).toBe("healthy");
+		expect(created.autoCheckEnabled).toBe(true);
+	});
+
+	test("persists repository options", async () => {
+		const config: RepositoryConfig = {
+			backend: "local",
+			path: REPOSITORY_BASE,
+			uploadLimit: { enabled: true, value: 7, unit: "Mbps" },
+			downloadLimit: { enabled: true, value: 8, unit: "Kbps" },
+		};
+
+		const result = await withContext({ organizationId: session.organizationId, userId: session.user.id }, () =>
+			repositoriesService.createRepository("opted out repo", config, undefined, false),
+		);
+
+		const created = await db.query.repositoriesTable.findFirst({
+			where: { id: result.repository.id },
+		});
+
+		expect(created).toMatchObject({
+			autoCheckEnabled: false,
+			uploadLimitEnabled: true,
+			uploadLimitValue: 7,
+			uploadLimitUnit: "Mbps",
+			downloadLimitEnabled: true,
+			downloadLimitValue: 8,
+			downloadLimitUnit: "Kbps",
+		});
+	});
+
+	test("normalizes repository names and rejects empty names", async () => {
+		const config: RepositoryConfig = { backend: "local", path: REPOSITORY_BASE };
+
+		const result = await withContext({ organizationId: session.organizationId, userId: session.user.id }, () =>
+			repositoriesService.createRepository("  normalized repository  ", config),
+		);
+
+		expect(result.repository.name).toBe("normalized repository");
+
+		await expect(
+			withContext({ organizationId: session.organizationId, userId: session.user.id }, () =>
+				repositoriesService.createRepository(" \t\n ", { backend: "local", path: REPOSITORY_BASE }),
+			),
+		).rejects.toThrow("Repository name cannot be empty");
 	});
 
 	test("creates a shortId-scoped repository path when using a custom directory", async () => {
@@ -168,6 +212,52 @@ describe("repositoriesService.createRepository", () => {
 		const savedConfig = created.config as Extract<RepositoryConfig, { backend: "local" }>;
 		expect(savedConfig.path).toBe(explicitPath);
 		expect(created.status).toBe("healthy");
+	});
+});
+
+describe("repositoriesService.updateRepository", () => {
+	test("normalizes repository names and rejects explicit empty updates", async () => {
+		const repository = await createTestRepository(session.organizationId);
+
+		const updated = await withContext({ organizationId: session.organizationId, userId: session.user.id }, () =>
+			repositoriesService.updateRepository(repository.shortId, { name: "  updated repository  " }),
+		);
+
+		expect(updated.repository.name).toBe("updated repository");
+
+		await expect(
+			withContext({ organizationId: session.organizationId, userId: session.user.id }, () =>
+				repositoriesService.updateRepository(repository.shortId, { name: "" }),
+			),
+		).rejects.toThrow("Repository name cannot be empty");
+
+		await expect(
+			withContext({ organizationId: session.organizationId, userId: session.user.id }, () =>
+				repositoriesService.updateRepository(repository.shortId, { name: " \t\n " }),
+			),
+		).rejects.toThrow("Repository name cannot be empty");
+	});
+});
+
+describe("repositoriesService.checkHealth", () => {
+	afterEach(() => {
+		vi.restoreAllMocks();
+	});
+
+	test("allows manual health checks for repositories opted out of scheduled checks", async () => {
+		const repository = await createTestRepository(session.organizationId, { autoCheckEnabled: false });
+		vi.spyOn(restic, "check").mockReturnValue(
+			Effect.succeed({ success: true, hasErrors: false, output: "", error: null }),
+		);
+
+		await withContext({ organizationId: session.organizationId, userId: session.user.id }, () =>
+			repositoriesService.checkHealth(repository.shortId),
+		);
+
+		const updated = await db.query.repositoriesTable.findFirst({ where: { id: repository.id } });
+
+		expect(updated?.status).toBe("healthy");
+		expect(updated?.lastChecked).not.toBeNull();
 	});
 });
 

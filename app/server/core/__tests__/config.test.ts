@@ -96,6 +96,39 @@ describe("parseConfig", () => {
 		expect(config.resticHostname).toBe("manual-restic-host");
 	});
 
+	test("defaults the server idle timeout to 60 seconds", () => {
+		const config = parseConfig(createEnv());
+
+		expect(config.serverIdleTimeout).toBe(60);
+	});
+
+	test.each([
+		[-1, 1],
+		[0, 1],
+		[1, 1],
+		[120, 120],
+		[255, 255],
+		[256, 255],
+		[1000, 255],
+	])("normalizes a server idle timeout of %i to %i seconds", (timeout, expected) => {
+		const config = parseConfig(
+			createEnv({
+				SERVER_IDLE_TIMEOUT: String(timeout),
+			}),
+		);
+
+		expect(config.serverIdleTimeout).toBe(expected);
+	});
+
+	test.each(["1.5", "invalid"])("exits when the server idle timeout is %s", (timeout) => {
+		expectParseConfigToExit(
+			createEnv({
+				SERVER_IDLE_TIMEOUT: timeout,
+			}),
+			"SERVER_IDLE_TIMEOUT",
+		);
+	});
+
 	test("parses desktop runtime values when present", () => {
 		const config = parseConfig(
 			createEnv({

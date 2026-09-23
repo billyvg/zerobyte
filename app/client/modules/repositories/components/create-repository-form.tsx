@@ -1,6 +1,6 @@
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useState } from "react";
-import { useForm } from "react-hook-form";
+import { useForm, useWatch } from "react-hook-form";
 import { Save } from "lucide-react";
 import { z } from "zod";
 import { cn } from "~/client/lib/utils";
@@ -50,6 +50,7 @@ import { useSuspenseQuery } from "@tanstack/react-query";
 const formBaseFields = {
 	name: z.string().min(2).max(32),
 	compressionMode: z.enum(COMPRESSION_MODES).optional(),
+	autoCheckEnabled: z.boolean().default(true),
 };
 
 export const formSchema = z
@@ -109,6 +110,7 @@ export const CreateRepositoryForm = ({
 	loading,
 	className,
 }: Props) => {
+	const formDefaultValues = initialValues ?? { autoCheckEnabled: true };
 	const getConstants = useServerFn(getServerConstants);
 	const { data: constants } = useSuspenseQuery({
 		queryKey: ["server-constants"],
@@ -117,17 +119,18 @@ export const CreateRepositoryForm = ({
 
 	const form = useForm<RepositoryFormValues>({
 		resolver: zodResolver(formSchema, undefined, { raw: true }),
-		defaultValues: initialValues,
+		defaultValues: formDefaultValues,
 		resetOptions: {
 			keepDefaultValues: true,
 			keepDirtyValues: false,
 		},
 	});
 
-	const { watch, setValue } = form;
+	const { setValue } = form;
 
-	const watchedBackend = watch("backend");
-	const watchedIsExistingRepository = watch("isExistingRepository");
+	const backend = useWatch({ control: form.control, name: "backend" });
+	const isExisting = useWatch({ control: form.control, name: "isExistingRepository" });
+	const exactPath = mode === "update" || isExisting === true;
 
 	const [passwordMode, setPasswordMode] = useState<"default" | "custom">("default");
 
@@ -170,15 +173,21 @@ export const CreateRepositoryForm = ({
 							<FormLabel>Backend</FormLabel>
 							<Select
 								onValueChange={(value) => {
+									const currentValues = form.getValues();
+									const selectedBackend = value as keyof ReturnType<typeof defaultValuesForType>;
+									const backendDefaultValues = defaultValuesForType(constants.REPOSITORY_BASE)[
+										selectedBackend
+									];
+									const autoCheckEnabled = currentValues.autoCheckEnabled ?? true;
+									const resetValues = {
+										name: currentValues.name,
+										isExistingRepository: currentValues.isExistingRepository,
+										customPassword: currentValues.customPassword,
+										autoCheckEnabled,
+										...backendDefaultValues,
+									};
 									field.onChange(value);
-									form.reset({
-										name: form.getValues().name,
-										isExistingRepository: form.getValues().isExistingRepository,
-										customPassword: form.getValues().customPassword,
-										...defaultValuesForType(constants.REPOSITORY_BASE)[
-											value as keyof ReturnType<typeof defaultValuesForType>
-										],
-									});
+									form.reset(resetValues);
 								}}
 								value={field.value ?? ""}
 								disabled={mode === "update"}
@@ -237,32 +246,58 @@ export const CreateRepositoryForm = ({
 
 				<FormField
 					control={form.control}
-					name="isExistingRepository"
+					name="autoCheckEnabled"
 					render={({ field }) => (
 						<FormItem className="flex flex-row items-center space-x-3">
 							<FormControl>
 								<Checkbox
 									checked={field.value}
-									disabled={mode === "update"}
 									onCheckedChange={(checked) => {
-										field.onChange(checked);
-										if (!checked) {
-											setPasswordMode("default");
-											setValue("customPassword", undefined);
-										}
+										const autoCheckEnabled = checked === true;
+										field.onChange(autoCheckEnabled);
 									}}
 								/>
 							</FormControl>
 							<div className="space-y-1">
-								<FormLabel>Import existing repository</FormLabel>
+								<FormLabel>Enable scheduled repository health checks</FormLabel>
 								<FormDescription>
-									Check this if the repository already exists at the specified location
+									Automatically run scheduled health checks for this repository. This does not affect
+									manual health checks.
 								</FormDescription>
 							</div>
 						</FormItem>
 					)}
 				/>
-				{watchedIsExistingRepository && (
+
+				{mode === "create" && (
+					<FormField
+						control={form.control}
+						name="isExistingRepository"
+						render={({ field }) => (
+							<FormItem className="flex flex-row items-center space-x-3">
+								<FormControl>
+									<Checkbox
+										checked={field.value}
+										onCheckedChange={(checked) => {
+											field.onChange(checked);
+											if (!checked) {
+												setPasswordMode("default");
+												setValue("customPassword", undefined);
+											}
+										}}
+									/>
+								</FormControl>
+								<div className="space-y-1">
+									<FormLabel>Import existing repository</FormLabel>
+									<FormDescription>
+										Check this if the repository already exists at the specified location
+									</FormDescription>
+								</div>
+							</FormItem>
+						)}
+					/>
+				)}
+				{isExisting && (
 					<>
 						<FormItem>
 							<FormLabel>Repository Password</FormLabel>
@@ -317,16 +352,16 @@ export const CreateRepositoryForm = ({
 					</>
 				)}
 
-				{watchedBackend === "local" && <LocalRepositoryForm form={form} />}
-				{watchedBackend === "s3" && <S3RepositoryForm form={form} />}
-				{watchedBackend === "r2" && <R2RepositoryForm form={form} />}
-				{watchedBackend === "gcs" && <GCSRepositoryForm form={form} />}
-				{watchedBackend === "azure" && <AzureRepositoryForm form={form} />}
-				{watchedBackend === "rclone" && <RcloneRepositoryForm form={form} />}
-				{watchedBackend === "rest" && <RestRepositoryForm form={form} />}
-				{watchedBackend === "sftp" && <SftpRepositoryForm form={form} />}
+				{backend === "local" && <LocalRepositoryForm form={form} exactPath={exactPath} />}
+				{backend === "s3" && <S3RepositoryForm form={form} />}
+				{backend === "r2" && <R2RepositoryForm form={form} />}
+				{backend === "gcs" && <GCSRepositoryForm form={form} />}
+				{backend === "azure" && <AzureRepositoryForm form={form} />}
+				{backend === "rclone" && <RcloneRepositoryForm form={form} />}
+				{backend === "rest" && <RestRepositoryForm form={form} />}
+				{backend === "sftp" && <SftpRepositoryForm form={form} />}
 
-				{watchedBackend && watchedBackend !== "local" && <AdvancedForm form={form} />}
+				{backend && backend !== "local" && <AdvancedForm form={form} />}
 
 				{mode === "update" && (
 					<Button type="submit" className="w-full" loading={loading}>

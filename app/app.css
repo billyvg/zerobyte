@@ -1,3 +1,5 @@
+@import "@fontsource-variable/google-sans-code/wght.css";
+@import "@fontsource-variable/google-sans-code/wght-italic.css";
 @import "tailwindcss";
 @plugin "@tailwindcss/typography";
 @import "tw-animate-css";
@@ -17,8 +19,8 @@
 	--container-xwide: 80rem;
 	--breakpoint-xs: 32rem;
 	--font-sans:
-		"Google Sans Code", ui-sans-serif, system-ui, sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol",
-		"Noto Color Emoji";
+		"Google Sans Code Variable", ui-sans-serif, system-ui, sans-serif, "Apple Color Emoji", "Segoe UI Emoji",
+		"Segoe UI Symbol", "Noto Color Emoji";
 }
 
 html,
@@ -43,6 +45,16 @@ body {
 .main-content {
 	scrollbar-width: thin;
 	scrollbar-gutter: stable;
+}
+
+[data-slot="sidebar-wrapper"]:has([data-recovery-key-reminder]) .main-content {
+	padding-top: 3.5rem;
+}
+
+@media (min-width: 48rem) {
+	[data-slot="sidebar-wrapper"]:has([data-recovery-key-reminder]) [data-slot="sidebar-content"] {
+		margin-top: 3.5rem;
+	}
 }
 
 @theme inline {
