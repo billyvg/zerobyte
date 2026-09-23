@@ -17,8 +17,8 @@ RUN apk add --no-cache \
 	cifs-utils \
 	davfs2 \
 	fuse3 \
-	libcrypto3=3.5.7-r0 \
-	libssl3=3.5.7-r0 \
+	"libcrypto3>=3.5.7-r0" \
+	"libssl3>=3.5.7-r0" \
 	openssh-client-default \
 	sshfs \
 	tini \
