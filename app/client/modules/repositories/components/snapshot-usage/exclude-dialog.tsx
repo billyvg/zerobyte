@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { useMutation } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { Ban, Copy } from "lucide-react";
@@ -46,16 +46,20 @@ export const ExcludeDialog = ({ entry, schedule, displayBasePath, onClose }: Pro
 		() => (entry ? buildExcludePatternChoices(entry, (path) => displayPathFns.strip(path)) : []),
 		[entry, displayPathFns],
 	);
-	const [pattern, setPattern] = useState("");
-	const [selectedId, setSelectedId] = useState<string | null>(null);
+	const [pattern, setPattern] = useState(choices[0]?.pattern ?? "");
+	const [selectedId, setSelectedId] = useState<string | null>(choices[0]?.id ?? null);
 
-	useEffect(() => {
+	// Preselect the first suggestion whenever a different entry is opened.
+	// Adjusted during render rather than in an effect, to skip an extra render.
+	const [choicesShown, setChoicesShown] = useState(choices);
+	if (choicesShown !== choices) {
+		setChoicesShown(choices);
 		const first = choices[0];
-		if (!first) return;
-
-		setPattern(first.pattern);
-		setSelectedId(first.id);
-	}, [choices]);
+		if (first) {
+			setPattern(first.pattern);
+			setSelectedId(first.id);
+		}
+	}
 
 	const addExclusion = useMutation({
 		...addExcludePatternsMutation(),
