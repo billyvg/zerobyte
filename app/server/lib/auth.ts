@@ -41,6 +41,11 @@ export const auth = betterAuth({
 	advanced: {
 		cookiePrefix: "zerobyte",
 		useSecureCookies: config.isSecure,
+		// With `protocol: "auto"`, the per-request base URL comes from X-Forwarded-Proto/Host
+		// behind a TLS-terminating reverse proxy. better-auth 1.7 stopped trusting those headers
+		// by default, which made it resolve `http://` URLs for an `https://` BASE_URL (breaking
+		// SSO callbacks and passkeys). Forwarded hosts are still limited to `allowedHosts`.
+		trustedProxyHeaders: true,
 		ipAddress: {
 			disableIpTracking: config.flags.disableRateLimiting,
 		},
