@@ -29,6 +29,7 @@ import type { DumpPathKind, UpdateRepositoryBody } from "./repositories.dto";
 import { findCommonAncestor, normalizeAbsolutePath } from "@zerobyte/core/utils";
 import { prepareSnapshotDump } from "./helpers/dump";
 import { deleteAllUsageTrees, loadUsageTree } from "./helpers/snapshot-usage-store";
+import { diffUsageDirectory } from "./helpers/snapshot-usage-diff";
 import { emptyRepositoryStats, refreshStoredRepositoryStats } from "./helpers/repository-stats";
 import { asShortId, type ShortId } from "~/server/utils/branded";
 import { decryptRepositoryConfig, encryptRepositoryConfig } from "./repository-config-secrets";
@@ -419,6 +420,51 @@ const startSnapshotUsageScan = async (shortId: ShortId, snapshotId: string) => {
 	}
 
 	return commands.createScanUsage({ repository, snapshotId }).start();
+};
+
+/**
+ * Compares this snapshot's recorded usage tree against another snapshot's,
+ * one directory at a time, biggest change first.
+ *
+ * Like {@link getSnapshotUsage}, this never touches the repository — both
+ * trees are already stored.
+ */
+const getSnapshotUsageDiff = async (
+	shortId: ShortId,
+	snapshotId: string,
+	againstSnapshotId: string,
+	options?: { path?: string; limit?: number },
+) => {
+	const repository = await findRepository(shortId);
+
+	if (!repository) {
+		throw new NotFoundError("Repository not found");
+	}
+
+	const current = loadUsageTree(repository.id, snapshotId);
+	const against = loadUsageTree(repository.id, againstSnapshotId);
+
+	if (!current || !against) {
+		const missing =
+			!current && !against ? ("both" as const) : !current ? ("current" as const) : ("against" as const);
+		return { status: "missing" as const, missing };
+	}
+
+	const requestedPath = options?.path
+		? normalizeAbsolutePath(options.path)
+		: (current.meta.roots[0] ?? against.meta.roots[0] ?? "/");
+	const limit = Math.min(1000, Math.max(1, options?.limit ?? 500));
+
+	const { directory, entries, totalEntries } = diffUsageDirectory(current, against, requestedPath, limit);
+
+	return {
+		status: "ready" as const,
+		meta: { current: current.meta, against: against.meta },
+		path: requestedPath,
+		directory,
+		entries,
+		totalEntries,
+	};
 };
 
 const restoreSnapshot = async (
@@ -897,6 +943,7 @@ export const repositoriesService = {
 	listSnapshotFiles,
 	getSnapshotUsage,
 	startSnapshotUsageScan,
+	getSnapshotUsageDiff,
 	restoreSnapshot,
 	dumpSnapshot,
 	getSnapshotDetails,
